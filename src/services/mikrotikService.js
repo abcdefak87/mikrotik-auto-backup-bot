@@ -72,8 +72,10 @@ async function performBackup(router) {
   const timestamp = format(new Date(), 'yyyyMMdd_HHmmss');
   const backupName = `${routerName}_backup_${timestamp}`;
   const exportName = `${routerName}_export_${timestamp}`;
-  const remoteBackup = `/${backupName}.backup`;
-  const remoteExport = `/${exportName}.rsc`;
+  const remoteBackupFile = `${backupName}.backup`;
+  const remoteExportFile = `${exportName}.rsc`;
+  const remoteBackup = `/${remoteBackupFile}`;
+  const remoteExport = `/${remoteExportFile}`;
   const routerDir = path.join(config.backup.directory, routerName);
   const localBackup = path.join(routerDir, `${backupName}.backup`);
   const localExport = path.join(routerDir, `${exportName}.rsc`);
@@ -88,6 +90,9 @@ async function performBackup(router) {
     const sftp = await getSftp(conn);
     await downloadFile(sftp, remoteBackup, localBackup);
     await downloadFile(sftp, remoteExport, localExport);
+    // Prevent MikroTik storage from filling up with leftover artifacts.
+    await execCommand(conn, `/file remove ${remoteBackupFile}`);
+    await execCommand(conn, `/file remove ${remoteExportFile}`);
 
     return {
       label: timestamp,
