@@ -1,0 +1,22 @@
+{
+  "name": "telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot untuk backup MikroTik otomatis setiap hari pukul 18:00",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "echo \"No tests configured\" && exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.2.3",
+    "fs-extra": "^11.3.2",
+    "node-cron": "^4.2.1",
+    "node-telegram-bot-api": "^0.63.0",
+    "ssh2": "^1.17.0"
+  }
+}

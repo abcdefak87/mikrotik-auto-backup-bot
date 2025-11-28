@@ -1,0 +1,574 @@
+const TelegramBot = require('node-telegram-bot-api');
+const cron = require('node-cron');
+const fs = require('fs-extra');
+const path = require('path');
+const config = require('./config');
+const { performBackup, testConnection } = require('./services/mikrotikService');
+const {
+  getRouters,
+  addRouter,
+  removeRouter,
+} = require('./services/routerStore');
+
+if (!config.telegram.token) {
+  console.error(
+    'Missing TELEGRAM_BOT_TOKEN. Set it in telegram-bot/.env before running.'
+  );
+  process.exit(1);
+}
+
+const allowedChats = new Set(
+  (config.telegram.allowedChatIds || []).filter(Boolean)
+);
+if (config.telegram.defaultChatId) {
+  allowedChats.add(config.telegram.defaultChatId);
+}
+
+const ensureChatAllowed = (chatId) =>
+  allowedChats.size === 0 || allowedChats.has(String(chatId));
+
+const bot = new TelegramBot(config.telegram.token, { polling: true });
+let lastBackupMeta = null;
+let scheduledJob = null;
+const sessions = new Map();
+
+const formatDate = (date) =>
+  date
+    ? new Intl.DateTimeFormat('id-ID', {
+        dateStyle: 'full',
+        timeStyle: 'short',
+      }).format(date)
+    : '-';
+
+const parseArgs = (text) => text.split(/\s+/).slice(1).filter(Boolean);
+const makeCallbackData = (action, payload) =>
+  payload ? `${action}|${encodeURIComponent(payload)}` : action;
+const parseCallbackData = (text = '') => {
+  const [action, rawPayload] = text.split('|');
+  return {
+    action,
+    payload: rawPayload ? decodeURIComponent(rawPayload) : null,
+  };
+};
+
+const chunkButtons = (items, size = 2) => {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const sendMainMenu = async (chatId) => {
+  const inline_keyboard = [
+    [
+      {
+        text: '📊 Status Backup',
+        callback_data: makeCallbackData('status'),
+      },
+    ],
+    [
+      {
+        text: '💾 Backup Semua Router',
+        callback_data: makeCallbackData('backup_all'),
+      },
+    ],
+    [
+      {
+        text: '📍 Backup Router Tertentu',
+        callback_data: makeCallbackData('backup_router_select'),
+      },
+    ],
+    [
+      {
+        text: '📋 Daftar Router',
+        callback_data: makeCallbackData('list_routers'),
+      },
+    ],
+    [
+      {
+        text: '➕ Tambah Router',
+        callback_data: makeCallbackData('add_router_flow'),
+      },
+      {
+        text: '➖ Hapus Router',
+        callback_data: makeCallbackData('remove_router_select'),
+      },
+    ],
+    [
+      {
+        text: '🧪 Test Koneksi Router',
+        callback_data: makeCallbackData('test_router_select'),
+      },
+    ],
+  ];
+
+  await bot.sendMessage(chatId, 'Pilih menu:', {
+    reply_markup: {
+      inline_keyboard,
+    },
+  });
+};
+
+async function findRouterByName(name) {
+  const routers = await getRouters();
+  return routers.find((r) => r.name === name);
+}
+
+async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
+  if (!chatId) {
+    console.warn('No chat ID available for backup delivery.');
+    return;
+  }
+
+  const routers = await getRouters();
+  if (!routers.length) {
+    await bot.sendMessage(
+      chatId,
+      'Belum ada router terdaftar. Tambahkan dengan tombol "Tambah Router".'
+    );
+    return;
+  }
+
+  let targetRouters = routers;
+  if (routerName) {
+    const router = routers.find((r) => r.name === routerName);
+    if (!router) {
+      await bot.sendMessage(chatId, `Router "${routerName}" tidak ditemukan.`);
+      return;
+    }
+    targetRouters = [router];
+  }
+
+  const notifyMessage = triggeredBySchedule
+    ? `Menjalankan backup terjadwal (${targetRouters.length} router)...`
+    : `Menjalankan backup (${targetRouters.length} router)...`;
+  await bot.sendMessage(chatId, notifyMessage);
+
+  const summary = [];
+  for (const router of targetRouters) {
+    try {
+      const result = await performBackup(router);
+
+      await bot.sendDocument(chatId, result.backupPath, {
+        caption: `[${router.name}] Backup binary (${path.basename(
+          result.backupPath
+        )})`,
+      });
+      await bot.sendDocument(chatId, result.exportPath, {
+        caption: `[${router.name}] Backup konfigurasi (${path.basename(
+          result.exportPath
+        )})`,
+      });
+
+      summary.push({
+        name: router.name,
+        success: true,
+      });
+    } catch (err) {
+      console.error('Backup error:', err);
+      summary.push({
+        name: router.name,
+        success: false,
+        error: err.message || 'Tidak diketahui',
+      });
+      await bot.sendMessage(
+        chatId,
+        `[${router.name}] Backup gagal: ${err.message || 'Tidak diketahui'}`
+      );
+    }
+  }
+
+  lastBackupMeta = {
+    successAt: new Date(),
+    routers: summary,
+  };
+
+  const successCount = summary.filter((s) => s.success).length;
+  await bot.sendMessage(
+    chatId,
+    `Backup selesai ${formatDate(
+      lastBackupMeta.successAt
+    )}. Berhasil: ${successCount}, Gagal: ${summary.length - successCount}.`
+  );
+}
+
+function scheduleJob() {
+  if (!config.telegram.defaultChatId) {
+    console.warn(
+      'TELEGRAM_DEFAULT_CHAT_ID belum diatur. Backup terjadwal tidak akan dikirim.'
+    );
+    return;
+  }
+
+  scheduledJob = cron.schedule(
+    config.backup.cronSchedule,
+    () => sendBackup(config.telegram.defaultChatId, true),
+    {
+      timezone: config.backup.timezone,
+    }
+  );
+
+  console.log(
+    `Backup otomatis aktif setiap "${config.backup.cronSchedule}" (${config.backup.timezone})`
+  );
+}
+
+function getNextRunTime() {
+  if (!scheduledJob) return null;
+  try {
+    return scheduledJob.nextDates().toDate();
+  } catch (err) {
+    return null;
+  }
+}
+
+async function sendStatusMessage(chatId) {
+  const routers = await getRouters();
+  const nextRun = getNextRunTime();
+  const routerLines = routers.length
+    ? routers
+        .map(
+          (r) => `- ${r.name}: ${r.host}:${r.port || 22} (${r.username})`
+        )
+        .join('\n')
+    : '- Belum ada router';
+
+  const lastSummary = lastBackupMeta?.routers
+    ?.map(
+      (r) => `  * ${r.name}: ${r.success ? '✅ Berhasil' : `❌ ${r.error}`}`
+    )
+    .join('\n');
+
+  const response = [
+    `Total router: ${routers.length}`,
+    routerLines,
+    `Folder lokal: ${config.backup.directory}`,
+    `Jadwal cron: ${config.backup.cronSchedule} (${config.backup.timezone})`,
+    `Backup terakhir: ${
+      lastBackupMeta?.successAt
+        ? formatDate(lastBackupMeta.successAt)
+        : 'Belum pernah'
+    }`,
+    lastSummary ? `Ringkasan:\n${lastSummary}` : null,
+    `Backup berikut: ${
+      nextRun ? formatDate(nextRun) : 'Tidak terjadwal / menunggu konfigurasi'
+    }`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  await bot.sendMessage(chatId, response);
+}
+
+async function sendRouterListMessage(chatId) {
+  const routers = await getRouters();
+  if (!routers.length) {
+    await bot.sendMessage(chatId, 'Belum ada router terdaftar.');
+    return;
+  }
+  const lines = routers
+    .map(
+      (r, idx) =>
+        `${idx + 1}. ${r.name} - ${r.host}:${r.port || 22} (${r.username})`
+    )
+    .join('\n');
+  await bot.sendMessage(chatId, `Daftar router:\n${lines}`);
+}
+
+async function sendRouterSelection(chatId, action, emptyMessage) {
+  const routers = await getRouters();
+  if (!routers.length) {
+    await bot.sendMessage(chatId, emptyMessage || 'Belum ada router.');
+    return;
+  }
+
+  const buttons = routers.map((router) => ({
+    text: router.name,
+    callback_data: makeCallbackData(action, router.name),
+  }));
+
+  const inline_keyboard = chunkButtons(buttons);
+  inline_keyboard.push([
+    {
+      text: '⬅️ Kembali ke Menu',
+      callback_data: makeCallbackData('menu'),
+    },
+  ]);
+
+  await bot.sendMessage(chatId, 'Pilih router:', {
+    reply_markup: {
+      inline_keyboard,
+    },
+  });
+}
+
+function startAddRouterFlow(chatId) {
+  clearSession(chatId);
+  sessions.set(chatId, {
+    action: 'add_router',
+    step: 'name',
+    data: {},
+  });
+  bot.sendMessage(
+    chatId,
+    'Tambah router baru.\nMasukkan nama router (contoh: kantor):'
+  );
+}
+
+function clearSession(chatId) {
+  sessions.delete(chatId);
+}
+
+async function handleSessionInput(chatId, text) {
+  const session = sessions.get(chatId);
+  if (!session) return;
+  const value = text.trim();
+
+  if (session.action === 'add_router') {
+    if (session.step === 'name') {
+      session.data.name = value;
+      session.step = 'host';
+      bot.sendMessage(chatId, 'Masukkan host/IP router (contoh: 192.168.88.1):');
+      return;
+    }
+    if (session.step === 'host') {
+      session.data.host = value;
+      session.step = 'username';
+      bot.sendMessage(chatId, 'Masukkan username router:');
+      return;
+    }
+    if (session.step === 'username') {
+      session.data.username = value;
+      session.step = 'password';
+      bot.sendMessage(chatId, 'Masukkan password router:');
+      return;
+    }
+    if (session.step === 'password') {
+      session.data.password = value;
+      session.step = 'port';
+      bot.sendMessage(
+        chatId,
+        'Masukkan port SSH (tekan Enter untuk default 22):'
+      );
+      return;
+    }
+    if (session.step === 'port') {
+      const port = value ? Number(value) : 22;
+      if (Number.isNaN(port) || port <= 0) {
+        bot.sendMessage(chatId, 'Port tidak valid. Masukkan angka yang benar.');
+        return;
+      }
+      session.data.port = port;
+      try {
+        await addRouter(session.data);
+        bot.sendMessage(
+          chatId,
+          `Router "${session.data.name}" berhasil ditambahkan.`
+        );
+      } catch (err) {
+        bot.sendMessage(
+          chatId,
+          `Gagal menambah router: ${err.message || 'Tidak diketahui'}`
+        );
+      } finally {
+        clearSession(chatId);
+        sendMainMenu(chatId);
+      }
+    }
+  }
+}
+
+bot.onText(/\/start/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  await bot.sendMessage(
+    chatId,
+    'Bot backup MikroTik siap. Gunakan tombol menu untuk mulai.'
+  );
+  await sendMainMenu(chatId);
+});
+
+bot.onText(/\/menu\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  await sendMainMenu(chatId);
+});
+
+bot.onText(/\/status\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  await sendStatusMessage(chatId);
+});
+
+bot.onText(/\/backup_now\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  const args = parseArgs(msg.text);
+  const routerName = args[0];
+  await sendBackup(chatId, false, routerName);
+});
+
+bot.onText(/\/test_connection\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  const args = parseArgs(msg.text);
+  const routerName = args[0];
+  if (!routerName) {
+    await bot.sendMessage(chatId, 'Gunakan: /test_connection <nama_router>');
+    return;
+  }
+  const router = await findRouterByName(routerName);
+  if (!router) {
+    await bot.sendMessage(chatId, `Router "${routerName}" tidak ditemukan.`);
+    return;
+  }
+  try {
+    await testConnection(router);
+    await bot.sendMessage(chatId, `Koneksi ke "${router.name}" OK.`);
+  } catch (err) {
+    await bot.sendMessage(
+      chatId,
+      `Koneksi ke "${router.name}" gagal: ${err.message || 'Tidak diketahui'}`
+    );
+  }
+});
+
+bot.onText(/\/add_router\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  startAddRouterFlow(chatId);
+});
+
+bot.onText(/\/remove_router\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  await sendRouterSelection(chatId, 'remove_router', 'Belum ada router.');
+});
+
+bot.onText(/\/list_routers\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  await sendRouterListMessage(chatId);
+});
+
+bot.onText(/\/cancel\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  if (sessions.has(chatId)) {
+    clearSession(chatId);
+    await bot.sendMessage(chatId, 'Aksi dibatalkan.');
+  }
+});
+
+bot.on('callback_query', async (query) => {
+  if (!query.message) return;
+  const chatId = query.message.chat.id;
+  if (!ensureChatAllowed(chatId)) {
+    await bot.answerCallbackQuery(query.id, { text: 'Tidak diizinkan.' });
+    return;
+  }
+
+  const { action, payload } = parseCallbackData(query.data);
+
+  try {
+    switch (action) {
+      case 'menu':
+        await sendMainMenu(chatId);
+        break;
+      case 'status':
+        await sendStatusMessage(chatId);
+        break;
+      case 'backup_all':
+        await sendBackup(chatId, false);
+        break;
+      case 'backup_router_select':
+        await sendRouterSelection(
+          chatId,
+          'backup_router',
+          'Belum ada router untuk backup.'
+        );
+        break;
+      case 'backup_router':
+        if (payload) {
+          await sendBackup(chatId, false, payload);
+        }
+        break;
+      case 'list_routers':
+        await sendRouterListMessage(chatId);
+        break;
+      case 'add_router_flow':
+        startAddRouterFlow(chatId);
+        break;
+      case 'remove_router_select':
+        await sendRouterSelection(
+          chatId,
+          'remove_router',
+          'Belum ada router untuk dihapus.'
+        );
+        break;
+      case 'remove_router':
+        if (payload) {
+          try {
+            await removeRouter(payload);
+            await bot.sendMessage(chatId, `Router "${payload}" dihapus.`);
+          } catch (err) {
+            await bot.sendMessage(
+              chatId,
+              `Gagal menghapus router: ${err.message || 'Tidak diketahui'}`
+            );
+          }
+        }
+        break;
+      case 'test_router_select':
+        await sendRouterSelection(
+          chatId,
+          'test_router',
+          'Belum ada router untuk diuji.'
+        );
+        break;
+      case 'test_router':
+        if (payload) {
+          const router = await findRouterByName(payload);
+          if (!router) {
+            await bot.sendMessage(chatId, `Router "${payload}" tidak ditemukan.`);
+            break;
+          }
+          try {
+            await testConnection(router);
+            await bot.sendMessage(chatId, `Koneksi ke "${router.name}" OK.`);
+          } catch (err) {
+            await bot.sendMessage(
+              chatId,
+              `Koneksi ke "${router.name}" gagal: ${err.message || 'Tidak diketahui'}`
+            );
+          }
+        }
+        break;
+      default:
+        await bot.sendMessage(chatId, 'Perintah tidak dikenal.');
+    }
+  } finally {
+    await bot.answerCallbackQuery(query.id);
+  }
+});
+
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  if (!sessions.has(chatId)) return;
+
+  if (!msg.text || msg.text.startsWith('/')) return;
+
+  await handleSessionInput(chatId, msg.text);
+});
+
+bot.on('polling_error', (err) => {
+  console.error('Polling error:', err);
+});
+
+fs.ensureDirSync(config.backup.directory);
+scheduleJob();
+
+console.log('Telegram bot berjalan. Tekan Ctrl+C untuk berhenti.');
+
