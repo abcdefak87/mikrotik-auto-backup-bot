@@ -91,8 +91,8 @@ async function performBackup(router) {
     await downloadFile(sftp, remoteBackup, localBackup);
     await downloadFile(sftp, remoteExport, localExport);
     // Prevent MikroTik storage from filling up with leftover artifacts.
-    await execCommand(conn, `/file remove ${remoteBackupFile}`);
-    await execCommand(conn, `/file remove ${remoteExportFile}`);
+    await execCommand(conn, `/file remove "${remoteBackupFile}"`);
+    await execCommand(conn, `/file remove "${remoteExportFile}"`);
 
     return {
       label: timestamp,
