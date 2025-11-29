@@ -122,6 +122,30 @@ const formatDate = (date, timezone = 'Asia/Jakarta') =>
       }).format(date)
     : '-';
 
+// Escape special characters for Markdown
+function escapeMarkdown(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\_/g, '\\_')
+    .replace(/\*/g, '\\*')
+    .replace(/\[/g, '\\[')
+    .replace(/\]/g, '\\]')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+    .replace(/\~/g, '\\~')
+    .replace(/\`/g, '\\`')
+    .replace(/\>/g, '\\>')
+    .replace(/\#/g, '\\#')
+    .replace(/\+/g, '\\+')
+    .replace(/\-/g, '\\-')
+    .replace(/\=/g, '\\=')
+    .replace(/\|/g, '\\|')
+    .replace(/\{/g, '\\{')
+    .replace(/\}/g, '\\}')
+    .replace(/\./g, '\\.')
+    .replace(/\!/g, '\\!');
+}
+
 const parseArgs = (text) => text.split(/\s+/).slice(1).filter(Boolean);
 const makeCallbackData = (action, payload) =>
   payload ? `${action}|${encodeURIComponent(payload)}` : action;
@@ -515,7 +539,7 @@ async function sendStatusMessage(chatId) {
     const routerLines = routers.length
       ? routers
           .map(
-            (r) => `- ${r.name}: ${r.host}:${r.port || 22} (${r.username})`
+            (r) => `- ${escapeMarkdown(r.name)}: ${escapeMarkdown(r.host)}:${r.port || 22} (${escapeMarkdown(r.username)})`
           )
           .join('\n')
       : '- Belum ada router';
@@ -524,7 +548,7 @@ async function sendStatusMessage(chatId) {
       ?.map(
         (r) => {
           const errorMsg = r.error ? sanitizeError(r.error) : 'Tidak diketahui';
-          return `  * ${r.name}: ${r.success ? '✅ Berhasil' : `❌ ${errorMsg}`}`;
+          return `  * ${escapeMarkdown(r.name)}: ${r.success ? '✅ Berhasil' : `❌ ${escapeMarkdown(errorMsg)}`}`;
         }
       )
       .join('\n');
@@ -538,23 +562,23 @@ async function sendStatusMessage(chatId) {
       : '❌ Tidak terjadwal / menunggu konfigurasi';
 
     const response = [
-      `📊 **Status Backup**`,
+      `📊 *Status Backup*`,
       '',
-      `📦 **Total Router:** ${routers.length}`,
+      `📦 *Total Router:* ${routers.length}`,
       routerLines,
       '',
-      `📁 **Folder Lokal:**`,
-      `\`${config.backup.directory}\``,
+      `📁 *Folder Lokal:*`,
+      `\`${escapeMarkdown(config.backup.directory)}\``,
       '',
-      `⏰ **Jadwal Backup:**`,
-      `${scheduleTime} (${config.backup.timezone})`,
+      `⏰ *Jadwal Backup:*`,
+      `${escapeMarkdown(scheduleTime)} (${escapeMarkdown(config.backup.timezone)})`,
       '',
-      `🕐 **Backup Terakhir:**`,
-      lastBackupTime,
-      lastSummary ? `\n📋 **Ringkasan Terakhir:**\n${lastSummary}` : '',
+      `🕐 *Backup Terakhir:*`,
+      escapeMarkdown(lastBackupTime),
+      lastSummary ? `\n📋 *Ringkasan Terakhir:*\n${lastSummary}` : '',
       '',
-      `⏭️ **Backup Berikutnya:**`,
-      nextRunTime,
+      `⏭️ *Backup Berikutnya:*`,
+      escapeMarkdown(nextRunTime),
     ]
       .filter(Boolean)
       .join('\n');
