@@ -317,7 +317,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       }
 
       summary.push({
-        name: router.name,
+        name: router.name.trim(), // Ensure trimmed name
         success: true,
       });
     } catch (err) {
@@ -328,7 +328,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       }
       const errorMessage = sanitizeError(err.message || 'Tidak diketahui');
       summary.push({
-        name: router.name,
+        name: router.name.trim(), // Ensure trimmed name
         success: false,
         error: errorMessage,
       });

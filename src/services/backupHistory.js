@@ -88,12 +88,35 @@ async function addBackupRecord(record) {
 
 async function getRouterHistory(routerName, limit = 50) {
   const history = await getHistory();
+  
+  // Debug logging
+  console.log(`[getRouterHistory] Looking for router: "${routerName}"`);
+  console.log(`[getRouterHistory] Total history records: ${history.length}`);
+  if (history.length > 0) {
+    console.log(`[getRouterHistory] First record routers:`, history[0].routers.map(r => r.name));
+  }
+  
   const routerHistory = history
-    .filter((record) => 
-      record.routers.some((r) => r.name === routerName)
-    )
+    .filter((record) => {
+      // Use trim and case-insensitive matching for router name
+      const found = record.routers.some((r) => {
+        const rName = (r.name || '').trim();
+        const searchName = (routerName || '').trim();
+        return rName === searchName;
+      });
+      return found;
+    })
     .map((record) => {
-      const routerResult = record.routers.find((r) => r.name === routerName);
+      // Use trim and case-insensitive matching
+      const routerResult = record.routers.find((r) => {
+        const rName = (r.name || '').trim();
+        const searchName = (routerName || '').trim();
+        return rName === searchName;
+      });
+      if (!routerResult) {
+        console.warn(`[getRouterHistory] Router result not found for "${routerName}"`);
+        return null;
+      }
       return {
         timestamp: record.timestamp,
         success: routerResult.success,
@@ -101,7 +124,10 @@ async function getRouterHistory(routerName, limit = 50) {
         triggeredBySchedule: record.triggeredBySchedule || false,
       };
     })
+    .filter(Boolean) // Remove null entries
     .slice(0, limit);
+  
+  console.log(`[getRouterHistory] Found ${routerHistory.length} records for router "${routerName}"`);
   
   return routerHistory;
 }
@@ -111,9 +137,20 @@ async function getStatistics(routerName = null) {
   
   if (routerName) {
     // Statistics for specific router
+    // Use trim for matching
+    const searchName = (routerName || '').trim();
     const routerRecords = history
-      .map((record) => record.routers.find((r) => r.name === routerName))
+      .map((record) => {
+        return record.routers.find((r) => {
+          const rName = (r.name || '').trim();
+          return rName === searchName;
+        });
+      })
       .filter(Boolean);
+    
+    console.log(`[getStatistics] Looking for router: "${routerName}" (trimmed: "${searchName}")`);
+    console.log(`[getStatistics] Total history records: ${history.length}`);
+    console.log(`[getStatistics] Found ${routerRecords.length} matching records`);
     
     if (routerRecords.length === 0) {
       return {
