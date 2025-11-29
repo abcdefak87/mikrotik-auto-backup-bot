@@ -1208,21 +1208,28 @@ async function handleSessionInput(chatId, text) {
       }
       
       try {
+        console.warn(`[addRouter] Attempting to add router: "${session.data.name}"`);
         await addRouter(session.data);
+        console.warn(`[addRouter] Router "${session.data.name}" successfully added`);
         try {
           await bot.sendMessage(
             chatId,
-            `Router "${session.data.name}" berhasil ditambahkan.`
+            `✅ Router "${formatHtml(session.data.name)}" berhasil ditambahkan.`,
+            { parse_mode: 'HTML' }
           );
         } catch (err) {
           console.error('Failed to send success message:', err);
         }
       } catch (err) {
+        console.error('[addRouter] Error adding router:', err);
+        console.error('[addRouter] Error message:', err.message);
+        console.error('[addRouter] Error stack:', err.stack);
         try {
           const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
           await bot.sendMessage(
             chatId,
-            `Gagal menambah router: ${sanitizedMsg}`
+            `❌ Gagal menambah router: ${formatHtml(sanitizedMsg)}`,
+            { parse_mode: 'HTML' }
           );
         } catch (sendErr) {
           console.error('Failed to send error message:', sendErr);

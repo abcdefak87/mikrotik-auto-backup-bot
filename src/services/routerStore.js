@@ -85,11 +85,24 @@ async function addRouter(router) {
           throw new Error('Nama router sudah digunakan');
         }
         routers.push(router);
-        await saveRouters(routers);
+        
+        // Write directly instead of calling saveRouters (which would add to queue again)
+        // We're already inside the queue, so we can write directly
+        await ensureStore();
+        const tempPath = `${routersPath}.tmp`;
+        await fs.writeJSON(tempPath, routers, { spaces: 2 });
+        if (await fs.pathExists(routersPath)) {
+          await fs.remove(routersPath);
+        }
+        await fs.rename(tempPath, routersPath);
+        
         resolve(router);
       } catch (err) {
         reject(err);
       }
+    }).catch((err) => {
+      // Catch any errors from the queue chain
+      reject(err);
     });
   });
 }
