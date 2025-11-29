@@ -60,7 +60,6 @@ async function loadCustomSchedule() {
       const data = await fs.readJSON(scheduleFilePath);
       customSchedule = data.schedule || null;
       if (customSchedule) {
-        console.log(`Loaded custom schedule: ${customSchedule}`);
       }
     }
   } catch (err) {
@@ -461,9 +460,6 @@ async function scheduleJob(cronSchedule = null) {
     await saveCustomSchedule();
   }
 
-  console.log(
-    `Backup otomatis aktif setiap "${schedule}" (${timezone})`
-  );
 }
 
 function getNextRunTime() {
@@ -1050,7 +1046,6 @@ function setSessionTimeout(chatId, timeoutMs = 30 * 60 * 1000) {
   
   // Set new timeout to auto-cleanup session after 30 minutes
   const timeout = setTimeout(() => {
-    console.log(`Auto-cleaning session for chatId: ${chatId} (timeout after 30 minutes)`);
     clearSession(chatId);
   }, timeoutMs);
   
