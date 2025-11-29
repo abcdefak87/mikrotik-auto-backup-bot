@@ -232,6 +232,6 @@ module.exports = {
   addBackupRecord,
   getRouterHistory,
   getStatistics,
-  getHistory,
+  getHistory, // Export for debug
 };
 
