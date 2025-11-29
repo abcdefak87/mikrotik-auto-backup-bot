@@ -106,11 +106,12 @@ function isValidHost(host) {
   return hostnameRegex.test(trimmed);
 }
 
-const formatDate = (date) =>
+const formatDate = (date, timezone = 'Asia/Jakarta') =>
   date
     ? new Intl.DateTimeFormat('id-ID', {
         dateStyle: 'full',
         timeStyle: 'short',
+        timeZone: timezone,
       }).format(date)
     : '-';
 
@@ -339,7 +340,8 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     await bot.sendMessage(
       chatId,
       `Backup selesai ${formatDate(
-        lastBackupMeta.successAt
+        lastBackupMeta.successAt,
+        config.backup.timezone
       )}. Berhasil: ${successCount}, Gagal: ${summary.length - successCount}.`
     );
   } catch (err) {
@@ -489,12 +491,12 @@ async function sendStatusMessage(chatId) {
     `Jadwal cron: ${config.backup.cronSchedule} (${config.backup.timezone})`,
     `Backup terakhir: ${
       lastBackupMeta?.successAt
-        ? formatDate(lastBackupMeta.successAt)
+        ? formatDate(lastBackupMeta.successAt, config.backup.timezone)
         : 'Belum pernah'
     }`,
     lastSummary ? `Ringkasan:\n${lastSummary}` : null,
     `Backup berikut: ${
-      nextRun ? formatDate(nextRun) : 'Tidak terjadwal / menunggu konfigurasi'
+      nextRun ? formatDate(nextRun, config.backup.timezone) : 'Tidak terjadwal / menunggu konfigurasi'
     }`,
   ]
     .filter(Boolean)
@@ -527,7 +529,7 @@ async function sendAutoBackupSettings(chatId) {
   const readableTime = cronToTime(currentSchedule) || currentSchedule;
   
   const statusText = isEnabled 
-    ? `✅ Aktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun) : 'Tidak diketahui'}`
+    ? `✅ Aktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun, config.backup.timezone) : 'Tidak diketahui'}`
     : `❌ Nonaktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBelum ada jadwal backup otomatis yang diaktifkan.`;
 
   const keyboard = [
