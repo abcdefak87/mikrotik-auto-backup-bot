@@ -59,8 +59,7 @@ async function loadCustomSchedule() {
     if (await fs.pathExists(scheduleFilePath)) {
       const data = await fs.readJSON(scheduleFilePath);
       customSchedule = data.schedule || null;
-      if (customSchedule) {
-      }
+      // Custom schedule loaded
     }
   } catch (err) {
     console.warn('Failed to load custom schedule:', err.message);
