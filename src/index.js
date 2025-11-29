@@ -1285,39 +1285,6 @@ bot.onText(/\/health\b/, async (msg) => {
   await sendHealthCheck(chatId);
 });
 
-bot.onText(/\/debug_history\b/, async (msg) => {
-  const chatId = msg.chat.id;
-  if (!ensureChatAllowed(chatId)) return;
-  
-  try {
-    const history = await getHistory();
-    const routers = await getRouters();
-    
-    const debugInfo = [
-      `📊 **Debug History**`,
-      '',
-      `Total History Records: ${history.length}`,
-      `Total Routers: ${routers.length}`,
-      '',
-      `Router Names:`,
-      ...routers.map(r => `- "${r.name}"`),
-      '',
-      history.length > 0 
-        ? `**Latest Record:**\nTimestamp: ${history[0].timestamp}\nRouters: ${history[0].routers?.map(r => `"${r.name}" (${r.success ? '✅' : '❌'})`).join(', ') || 'none'}`
-        : 'No history records',
-      '',
-      history.length > 0 && history[0].routers
-        ? `**All Router Names in History:**\n${[...new Set(history.flatMap(r => r.routers?.map(rt => rt.name) || []))].map(n => `- "${n}"`).join('\n')}`
-        : '',
-    ].filter(Boolean).join('\n');
-    
-    await bot.sendMessage(chatId, debugInfo, { parse_mode: 'Markdown' });
-  } catch (err) {
-    const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
-    await bot.sendMessage(chatId, `❌ Error: ${sanitizedMsg}`);
-  }
-});
-
 bot.on('callback_query', async (query) => {
   if (!query.message) return;
   const chatId = query.message.chat.id;
@@ -1340,11 +1307,11 @@ bot.on('callback_query', async (query) => {
   const isLongOperation = [
     'backup_all',
     'backup_router',
-    'history_files_all',
-    'history_files',
+    'files_all',
+    'files',
     'delete_backup',
     'files_page',
-  ].includes(action) || action.startsWith('history_files_');
+  ].includes(action) || action.startsWith('files_');
 
   if (isLongOperation) {
     try {
