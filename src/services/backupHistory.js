@@ -38,34 +38,37 @@ async function getHistory() {
 
 async function saveHistory(list) {
   await ensureStore();
+  console.log(`[saveHistory] Starting save for ${list.length} records`);
   // Use queue to prevent concurrent writes (race condition fix)
-  writeQueue = writeQueue.then(async () => {
-    try {
-      console.log(`[saveHistory] Writing ${list.length} records to history file`);
-      // Write to temporary file first, then rename (atomic operation)
-      const tempPath = `${historyPath}.tmp`;
-      await fs.writeJSON(tempPath, list, { spaces: 2 });
-      console.log(`[saveHistory] Temp file written: ${tempPath}`);
-      // Use rename for atomic operation (works on most filesystems)
-      if (await fs.pathExists(historyPath)) {
-        await fs.remove(historyPath);
+  return new Promise((resolve, reject) => {
+    writeQueue = writeQueue.then(async () => {
+      try {
+        console.log(`[saveHistory] Writing ${list.length} records to history file`);
+        // Write to temporary file first, then rename (atomic operation)
+        const tempPath = `${historyPath}.tmp`;
+        await fs.writeJSON(tempPath, list, { spaces: 2 });
+        console.log(`[saveHistory] Temp file written: ${tempPath}`);
+        // Use rename for atomic operation (works on most filesystems)
+        if (await fs.pathExists(historyPath)) {
+          await fs.remove(historyPath);
+        }
+        await fs.rename(tempPath, historyPath);
+        console.log(`[saveHistory] History file saved successfully: ${historyPath}`);
+        resolve();
+      } catch (err) {
+        console.error('[saveHistory] Error saving history:', err);
+        console.error('[saveHistory] Error stack:', err.stack);
+        // Clean up temp file if it exists
+        await fs.remove(`${historyPath}.tmp`).catch(() => {});
+        reject(err);
       }
-      await fs.rename(tempPath, historyPath);
-      console.log(`[saveHistory] History file saved successfully: ${historyPath}`);
-    } catch (err) {
-      console.error('[saveHistory] Error saving history:', err);
-      console.error('[saveHistory] Error stack:', err.stack);
+    }).catch((err) => {
+      console.error('[saveHistory] Queue error:', err);
       // Clean up temp file if it exists
-      await fs.remove(`${historyPath}.tmp`).catch(() => {});
-      throw err;
-    }
-  }).catch((err) => {
-    console.error('[saveHistory] Queue error:', err);
-    // Clean up temp file if it exists
-    fs.remove(`${historyPath}.tmp`).catch(() => {});
-    throw err;
+      fs.remove(`${historyPath}.tmp`).catch(() => {});
+      reject(err);
+    });
   });
-  await writeQueue;
 }
 
 async function addBackupRecord(record) {
