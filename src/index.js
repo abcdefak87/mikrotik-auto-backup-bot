@@ -1574,6 +1574,9 @@ bot.on('message', async (msg) => {
       case '🧪 Test Koneksi Router':
         await sendRouterSelection(chatId, 'test_router', 'Belum ada router untuk diuji.');
         return;
+      case '📁 File Backup':
+        await sendFileBackupMenu(chatId);
+        return;
     }
     
     // Handle session input if session exists
