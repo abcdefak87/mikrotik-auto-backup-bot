@@ -706,7 +706,7 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
   
   if (routerName) {
     files = await getBackupFilesByRouter(routerName, 100); // Get more to allow pagination
-    title = `📁 **File Backup: ${routerName}**`;
+    title = `📁 <b>File Backup: ${formatHtml(routerName)}</b>`;
   } else {
     // For all routers, we need to map safe names back to original names
     const routers = await getRouters();
@@ -722,15 +722,16 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
       const originalName = routerNameMap.get(file.routerName) || file.routerName;
       return { ...file, routerName: originalName };
     });
-    title = '📁 **File Backup: Semua Router**';
+    title = '📁 <b>File Backup: Semua Router</b>';
   }
   
   if (files.length === 0) {
     await bot.sendMessage(
       chatId,
       routerName
-        ? `Belum ada file backup untuk router "${routerName}".`
-        : 'Belum ada file backup.'
+        ? `Belum ada file backup untuk router "${formatHtml(routerName)}".`
+        : 'Belum ada file backup.',
+      { parse_mode: 'HTML' }
     );
     return;
   }
@@ -762,7 +763,7 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
       const rscFile = group.files.find((f) => f.type === 'rsc');
       const totalSize = group.files.reduce((sum, f) => sum + f.size, 0);
       
-      return `${offset + idx + 1}. ${date}\n   📦 ${backupFile ? formatFileSize(backupFile.size) : 'N/A'} | 📄 ${rscFile ? formatFileSize(rscFile.size) : 'N/A'}\n   💾 Total: ${formatFileSize(totalSize)}`;
+      return `${offset + idx + 1}. ${formatHtml(date)}\n   📦 ${backupFile ? formatFileSize(backupFile.size) : 'N/A'} | 📄 ${rscFile ? formatFileSize(rscFile.size) : 'N/A'}\n   💾 Total: ${formatFileSize(totalSize)}`;
     });
   
   const keyboard = [];
