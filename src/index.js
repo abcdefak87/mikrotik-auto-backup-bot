@@ -1901,8 +1901,13 @@ fs.ensureDirSync(config.backup.directory);
 
 // Start download server if enabled
 if (config.downloadServer.enabled) {
-  startDownloadServer();
-  logger.info(`Download server enabled on port ${config.downloadServer.port}`);
+  try {
+    startDownloadServer();
+    logger.info(`Download server started on 0.0.0.0:${config.downloadServer.port}`);
+    logger.info(`Download server URL: ${config.downloadServer.baseUrl}`);
+  } catch (err) {
+    logger.error('Failed to start download server', err);
+  }
 } else {
   logger.info('Download server disabled');
 }

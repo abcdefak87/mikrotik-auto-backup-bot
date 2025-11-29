@@ -123,9 +123,10 @@ function startDownloadServer() {
     res.json({ status: 'ok' });
   });
   
-  const port = config.downloadServer.port || 3001;
-  server = app.listen(port, () => {
-    // Server started successfully
+  const port = config.downloadServer.port || 8888;
+  // Listen on all interfaces (0.0.0.0) to accept connections from any IP
+  server = app.listen(port, '0.0.0.0', () => {
+    // Server started successfully - will be logged by caller
   });
   
   server.on('error', (err) => {
