@@ -193,10 +193,11 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     try {
       const result = await performBackup(router);
 
-      // Send documents with error handling
+      // Send documents with error handling and proper stream cleanup
+      let backupStream = null;
       try {
         const backupFileName = path.basename(result.backupPath);
-        const backupStream = createReadStream(result.backupPath);
+        backupStream = createReadStream(result.backupPath);
         await bot.sendDocument(chatId, backupStream, {
           caption: `[${router.name}] Backup binary (${backupFileName})`,
           filename: backupFileName,
@@ -222,11 +223,17 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
             }
           }
         }
+      } finally {
+        // Ensure stream is properly closed to prevent file handle leaks
+        if (backupStream) {
+          backupStream.destroy();
+        }
       }
       
+      let exportStream = null;
       try {
         const exportFileName = path.basename(result.exportPath);
-        const exportStream = createReadStream(result.exportPath);
+        exportStream = createReadStream(result.exportPath);
         await bot.sendDocument(chatId, exportStream, {
           caption: `[${router.name}] Backup konfigurasi (${exportFileName})`,
           filename: exportFileName,
@@ -251,6 +258,11 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
               console.error('Failed to send error message:', msgErr.message || msgErr);
             }
           }
+        }
+      } finally {
+        // Ensure stream is properly closed to prevent file handle leaks
+        if (exportStream) {
+          exportStream.destroy();
         }
       }
 
@@ -308,6 +320,17 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   }
 }
 
+// Validate timezone
+function isValidTimezone(timezone) {
+  try {
+    // Try to create a date with the timezone
+    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function scheduleJob(cronSchedule = null) {
   if (!config.telegram.defaultChatId) {
     console.warn(
@@ -319,19 +342,40 @@ async function scheduleJob(cronSchedule = null) {
   // Use custom schedule if set, otherwise use default from config
   const schedule = cronSchedule || customSchedule || config.backup.cronSchedule;
   
+  // Validate and fix timezone
+  let timezone = config.backup.timezone;
+  if (!isValidTimezone(timezone)) {
+    console.warn(`Invalid timezone "${timezone}", falling back to "Asia/Jakarta"`);
+    timezone = 'Asia/Jakarta';
+  }
+  
   // Stop existing job if any
   if (scheduledJob) {
     scheduledJob.stop();
     scheduledJob = null;
   }
 
-  scheduledJob = cron.schedule(
-    schedule,
-    () => sendBackup(config.telegram.defaultChatId, true),
-    {
-      timezone: config.backup.timezone,
-    }
-  );
+  try {
+    scheduledJob = cron.schedule(
+      schedule,
+      () => sendBackup(config.telegram.defaultChatId, true),
+      {
+        timezone: timezone,
+      }
+    );
+  } catch (err) {
+    console.error(`Failed to schedule job with timezone "${timezone}":`, err.message);
+    // Fallback to UTC if timezone fails
+    console.warn('Falling back to UTC timezone');
+    scheduledJob = cron.schedule(
+      schedule,
+      () => sendBackup(config.telegram.defaultChatId, true),
+      {
+        timezone: 'UTC',
+      }
+    );
+    timezone = 'UTC';
+  }
 
   // Store custom schedule
   if (cronSchedule) {
@@ -340,7 +384,7 @@ async function scheduleJob(cronSchedule = null) {
   }
 
   console.log(
-    `Backup otomatis aktif setiap "${schedule}" (${config.backup.timezone})`
+    `Backup otomatis aktif setiap "${schedule}" (${timezone})`
   );
 }
 

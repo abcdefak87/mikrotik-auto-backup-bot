@@ -4,6 +4,9 @@ const fs = require('fs-extra');
 const dataDir = path.join(__dirname, '..', '..', 'data');
 const routersPath = path.join(dataDir, 'routers.json');
 
+// Simple queue-based locking mechanism to prevent race conditions
+let writeQueue = Promise.resolve();
+
 async function ensureStore() {
   await fs.ensureDir(dataDir);
   if (!(await fs.pathExists(routersPath))) {
@@ -35,7 +38,23 @@ async function getRouters() {
 
 async function saveRouters(list) {
   await ensureStore();
-  await fs.writeJSON(routersPath, list, { spaces: 2 });
+  // Use queue to prevent concurrent writes (race condition fix)
+  writeQueue = writeQueue.then(async () => {
+    // Write to temporary file first, then rename (atomic operation)
+    const tempPath = `${routersPath}.tmp`;
+    await fs.writeJSON(tempPath, list, { spaces: 2 });
+    // Use rename for atomic operation (works on most filesystems)
+    if (await fs.pathExists(routersPath)) {
+      await fs.remove(routersPath);
+    }
+    await fs.rename(tempPath, routersPath);
+  }).catch((err) => {
+    console.error('Error saving routers:', err);
+    // Clean up temp file if it exists
+    fs.remove(`${routersPath}.tmp`).catch(() => {});
+    throw err;
+  });
+  await writeQueue;
 }
 
 async function addRouter(router) {
@@ -52,22 +71,41 @@ async function addRouter(router) {
     throw new Error('Nama router tidak boleh kosong');
   }
   
-  const routers = await getRouters();
-  if (routers.some((r) => r.name === router.name)) {
-    throw new Error('Nama router sudah digunakan');
-  }
-  routers.push(router);
-  await saveRouters(routers);
-  return router;
+  // Use queue to prevent race condition when reading and writing
+  return new Promise((resolve, reject) => {
+    writeQueue = writeQueue.then(async () => {
+      try {
+        const routers = await getRouters();
+        if (routers.some((r) => r.name === router.name)) {
+          throw new Error('Nama router sudah digunakan');
+        }
+        routers.push(router);
+        await saveRouters(routers);
+        resolve(router);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
 }
 
 async function removeRouter(name) {
-  const routers = await getRouters();
-  const filtered = routers.filter((r) => r.name !== name);
-  if (filtered.length === routers.length) {
-    throw new Error('Router tidak ditemukan');
-  }
-  await saveRouters(filtered);
+  // Use queue to prevent race condition when reading and writing
+  return new Promise((resolve, reject) => {
+    writeQueue = writeQueue.then(async () => {
+      try {
+        const routers = await getRouters();
+        const filtered = routers.filter((r) => r.name !== name);
+        if (filtered.length === routers.length) {
+          throw new Error('Router tidak ditemukan');
+        }
+        await saveRouters(filtered);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
 }
 
 module.exports = {
