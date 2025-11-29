@@ -12,12 +12,6 @@ const {
   removeRouter,
 } = require('./services/routerStore');
 const {
-  addBackupRecord,
-  getRouterHistory,
-  getStatistics,
-  getHistory,
-} = require('./services/backupHistory');
-const {
   getBackupFiles,
   getBackupFilesByRouter,
   deleteBackupPair,
@@ -178,11 +172,6 @@ const sendMainMenu = async (chatId) => {
     [
       {
         text: '🧪 Test Koneksi Router',
-      },
-    ],
-    [
-      {
-        text: '📈 History & Statistics',
       },
     ],
   ];
@@ -356,27 +345,6 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     routers: summary,
   };
 
-  // Save to backup history
-  try {
-    console.log(`[sendBackup] Attempting to save history. Summary:`, JSON.stringify(summary, null, 2));
-    const result = await addBackupRecord({
-      timestamp: timestamp.toISOString(),
-      triggeredBySchedule,
-      routers: summary,
-    });
-    console.log(`[sendBackup] Backup history saved successfully: ${summary.length} routers, timestamp: ${timestamp.toISOString()}`);
-    
-    // Verify it was saved
-    const verifyHistory = await getHistory();
-    console.log(`[sendBackup] Verification: History now has ${verifyHistory.length} records`);
-    if (verifyHistory.length > 0) {
-      console.log(`[sendBackup] Latest record routers:`, verifyHistory[0].routers?.map(r => r.name) || 'none');
-    }
-  } catch (err) {
-    console.error('[sendBackup] Failed to save backup history:', err.message);
-    console.error('[sendBackup] Error details:', err);
-    console.error('[sendBackup] Error stack:', err.stack);
-  }
 
   // Update failure counts and check for alerts
   const failureThreshold = 3;
@@ -1563,26 +1531,6 @@ bot.on('callback_query', async (query) => {
           }
         }
         break;
-      case 'history_stats_all':
-        await sendStatistics(chatId);
-        break;
-      case 'history_stats':
-        if (payload) {
-          await sendStatistics(chatId, payload);
-        }
-        break;
-      case 'history_detail':
-        await sendRouterSelection(
-          chatId,
-          'history_detail_router',
-          'Belum ada router untuk melihat history.'
-        );
-        break;
-      case 'history_detail_router':
-        if (payload) {
-          await sendHistoryDetail(chatId, payload);
-        }
-        break;
       case 'history_files_all':
         await sendBackupFilesList(chatId);
         break;
@@ -1764,9 +1712,6 @@ bot.on('message', async (msg) => {
         return;
       case '🧪 Test Koneksi Router':
         await sendRouterSelection(chatId, 'test_router', 'Belum ada router untuk diuji.');
-        return;
-      case '📈 History & Statistics':
-        await sendHistoryMenu(chatId);
         return;
     }
     
