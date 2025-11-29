@@ -757,6 +757,15 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
   let files;
   let title;
   
+  // Clean up old file path maps
+  if (sessions.has(chatId)) {
+    const session = sessions.get(chatId);
+    if (session.filePathMapExpiry && session.filePathMapExpiry < Date.now()) {
+      delete session.filePathMap;
+      delete session.filePathMapExpiry;
+    }
+  }
+  
   if (routerName) {
     files = await getBackupFilesByRouter(routerName, 100); // Get more to allow pagination
     title = `📁 **File Backup: ${routerName}**`;
