@@ -15,6 +15,7 @@ const {
   addBackupRecord,
   getRouterHistory,
   getStatistics,
+  getHistory,
 } = require('./services/backupHistory');
 const {
   getBackupFiles,
@@ -1405,7 +1406,6 @@ bot.onText(/\/debug_history\b/, async (msg) => {
   if (!ensureChatAllowed(chatId)) return;
   
   try {
-    const { getHistory } = require('./services/backupHistory');
     const history = await getHistory();
     const routers = await getRouters();
     
