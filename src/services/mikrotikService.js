@@ -92,12 +92,12 @@ async function performBackup(router) {
   const remoteExport = `/${remoteExportFile}`;
   const routerDir = path.join(config.backup.directory, routerName);
   const backupDir = path.join(routerDir, 'backup');
-  const exportDir = path.join(routerDir, 'export');
+  const rscDir = path.join(routerDir, 'rsc');
   const localBackup = path.join(backupDir, `${backupName}.backup`);
-  const localExport = path.join(exportDir, `${exportName}.rsc`);
+  const localExport = path.join(rscDir, `${exportName}.rsc`);
 
   await fs.ensureDir(backupDir);
-  await fs.ensureDir(exportDir);
+  await fs.ensureDir(rscDir);
 
   const conn = await connectSsh(router);
   try {
