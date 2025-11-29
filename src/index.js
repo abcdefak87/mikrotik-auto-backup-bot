@@ -2,6 +2,7 @@ const TelegramBot = require('node-telegram-bot-api');
 const cron = require('node-cron');
 const fs = require('fs-extra');
 const path = require('path');
+const { createReadStream } = require('fs');
 const config = require('./config');
 const { performBackup, testConnection } = require('./services/mikrotikService');
 const {
@@ -157,10 +158,12 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
 
       // Send documents with error handling
       try {
-        await bot.sendDocument(chatId, result.backupPath, {
-          caption: `[${router.name}] Backup binary (${path.basename(
-            result.backupPath
-          )})`,
+        const backupFileName = path.basename(result.backupPath);
+        const backupStream = createReadStream(result.backupPath);
+        await bot.sendDocument(chatId, backupStream, {
+          caption: `[${router.name}] Backup binary (${backupFileName})`,
+          filename: backupFileName,
+          contentType: 'application/octet-stream',
         });
       } catch (docErr) {
         console.error(`Failed to send backup document for ${router.name}:`, docErr);
@@ -175,10 +178,12 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       }
       
       try {
-        await bot.sendDocument(chatId, result.exportPath, {
-          caption: `[${router.name}] Backup konfigurasi (${path.basename(
-            result.exportPath
-          )})`,
+        const exportFileName = path.basename(result.exportPath);
+        const exportStream = createReadStream(result.exportPath);
+        await bot.sendDocument(chatId, exportStream, {
+          caption: `[${router.name}] Backup konfigurasi (${exportFileName})`,
+          filename: exportFileName,
+          contentType: 'text/plain',
         });
       } catch (docErr) {
         console.error(`Failed to send export document for ${router.name}:`, docErr);
