@@ -171,8 +171,6 @@ const sendMainMenu = async (chatId) => {
       {
         text: '🧪 Test Koneksi Router',
       },
-    ],
-    [
       {
         text: '📁 File Backup',
       },
