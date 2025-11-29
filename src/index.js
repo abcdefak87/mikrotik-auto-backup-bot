@@ -181,7 +181,10 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   try {
     await bot.sendMessage(chatId, notifyMessage);
   } catch (err) {
-    console.error('Failed to send backup notification:', err);
+    // Only log if it's not a network error (to avoid spam)
+    if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+      console.error('Failed to send backup notification:', err.message || err);
+    }
     // Continue with backup even if notification fails
   }
 
@@ -200,15 +203,24 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
           contentType: 'application/octet-stream',
         });
       } catch (docErr) {
-        console.error(`Failed to send backup document for ${router.name}:`, docErr);
-        try {
-          const sanitizedMsg = sanitizeError(docErr.message || 'Tidak diketahui');
-          await bot.sendMessage(
-            chatId,
-            `[${router.name}] Backup berhasil, tetapi gagal mengirim file binary: ${sanitizedMsg}`
-          );
-        } catch (msgErr) {
-          console.error('Failed to send error message:', msgErr);
+        // Only log if it's not a network error (to avoid spam)
+        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+          console.error(`Failed to send backup document for ${router.name}:`, docErr.message || docErr);
+        }
+        // Don't try to send error message if network is down (will fail again)
+        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+          try {
+            const sanitizedMsg = sanitizeError(docErr.message || 'Tidak diketahui');
+            await bot.sendMessage(
+              chatId,
+              `[${router.name}] Backup berhasil, tetapi gagal mengirim file binary: ${sanitizedMsg}`
+            );
+          } catch (msgErr) {
+            // Silently fail if network is down
+            if (msgErr.code !== 'EFATAL' && msgErr.code !== 'ETIMEDOUT' && msgErr.code !== 'ECONNRESET') {
+              console.error('Failed to send error message:', msgErr.message || msgErr);
+            }
+          }
         }
       }
       
@@ -221,15 +233,24 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
           contentType: 'text/plain',
         });
       } catch (docErr) {
-        console.error(`Failed to send export document for ${router.name}:`, docErr);
-        try {
-          const sanitizedMsg = sanitizeError(docErr.message || 'Tidak diketahui');
-          await bot.sendMessage(
-            chatId,
-            `[${router.name}] Backup berhasil, tetapi gagal mengirim file export: ${sanitizedMsg}`
-          );
-        } catch (msgErr) {
-          console.error('Failed to send error message:', msgErr);
+        // Only log if it's not a network error (to avoid spam)
+        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+          console.error(`Failed to send export document for ${router.name}:`, docErr.message || docErr);
+        }
+        // Don't try to send error message if network is down (will fail again)
+        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+          try {
+            const sanitizedMsg = sanitizeError(docErr.message || 'Tidak diketahui');
+            await bot.sendMessage(
+              chatId,
+              `[${router.name}] Backup berhasil, tetapi gagal mengirim file export: ${sanitizedMsg}`
+            );
+          } catch (msgErr) {
+            // Silently fail if network is down
+            if (msgErr.code !== 'EFATAL' && msgErr.code !== 'ETIMEDOUT' && msgErr.code !== 'ECONNRESET') {
+              console.error('Failed to send error message:', msgErr.message || msgErr);
+            }
+          }
         }
       }
 
@@ -239,17 +260,30 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       });
     } catch (err) {
       const sanitizedError = sanitizeError(err);
-      console.error('Backup error:', sanitizedError);
+      // Only log if it's not a network error (to avoid spam)
+      if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+        console.error('Backup error:', sanitizedError);
+      }
       const errorMessage = sanitizeError(err.message || 'Tidak diketahui');
       summary.push({
         name: router.name,
         success: false,
         error: errorMessage,
       });
-      await bot.sendMessage(
-        chatId,
-        `[${router.name}] Backup gagal: ${errorMessage}`
-      );
+      // Don't try to send error message if network is down (will fail again)
+      if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+        try {
+          await bot.sendMessage(
+            chatId,
+            `[${router.name}] Backup gagal: ${errorMessage}`
+          );
+        } catch (msgErr) {
+          // Silently fail if network is down
+          if (msgErr.code !== 'EFATAL' && msgErr.code !== 'ETIMEDOUT' && msgErr.code !== 'ECONNRESET') {
+            console.error('Failed to send backup error message:', msgErr.message || msgErr);
+          }
+        }
+      }
     }
   }
 
@@ -259,12 +293,19 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   };
 
   const successCount = summary.filter((s) => s.success).length;
-  await bot.sendMessage(
-    chatId,
-    `Backup selesai ${formatDate(
-      lastBackupMeta.successAt
-    )}. Berhasil: ${successCount}, Gagal: ${summary.length - successCount}.`
-  );
+  try {
+    await bot.sendMessage(
+      chatId,
+      `Backup selesai ${formatDate(
+        lastBackupMeta.successAt
+      )}. Berhasil: ${successCount}, Gagal: ${summary.length - successCount}.`
+    );
+  } catch (err) {
+    // Silently fail if network is down (to avoid spam)
+    if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+      console.error('Failed to send backup summary:', err.message || err);
+    }
+  }
 }
 
 async function scheduleJob(cronSchedule = null) {
