@@ -132,16 +132,29 @@ async function removeRouter(name) {
           throw new Error('Router tidak ditemukan');
         }
         
-        await saveRouters(filtered);
+        // Write directly instead of calling saveRouters (which would add to queue again)
+        // We're already inside the queue, so we can write directly
+        await ensureStore();
+        const tempPath = `${routersPath}.tmp`;
+        console.warn(`[removeRouter] Writing to temp file: ${tempPath}`);
+        await fs.writeJSON(tempPath, filtered, { spaces: 2 });
+        console.warn(`[removeRouter] Temp file written, removing old file`);
+        if (await fs.pathExists(routersPath)) {
+          await fs.remove(routersPath);
+        }
+        console.warn(`[removeRouter] Renaming temp file to routers.json`);
+        await fs.rename(tempPath, routersPath);
         console.warn(`[removeRouter] Router "${trimmedName}" successfully removed`);
         resolve();
       } catch (err) {
         console.error(`[removeRouter] Error:`, err.message || err);
+        console.error(`[removeRouter] Error stack:`, err.stack);
         reject(err);
       }
     }).catch((err) => {
       // Catch any errors from the queue chain
       console.error(`[removeRouter] Queue error:`, err.message || err);
+      console.error(`[removeRouter] Queue error stack:`, err.stack);
       reject(err);
     });
   });
