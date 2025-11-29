@@ -601,139 +601,6 @@ async function sendHealthCheck(chatId) {
   await bot.sendMessage(chatId, healthInfo, { parse_mode: 'Markdown' });
 }
 
-async function sendHistoryMenu(chatId) {
-  const routers = await getRouters();
-  if (!routers.length) {
-    await bot.sendMessage(chatId, 'Belum ada router terdaftar.');
-    return;
-  }
-  
-  const keyboard = [
-    [
-      {
-        text: '📊 Statistics',
-        callback_data: 'history_stats_all',
-      },
-      {
-        text: '📁 File Backup',
-        callback_data: 'history_files_all',
-      },
-    ],
-  ];
-  
-  // Add router-specific buttons in 2 columns
-  const routerButtons = routers.map((router) => [
-    {
-      text: `📈 ${router.name}`,
-      callback_data: `history_stats_${encodeURIComponent(router.name)}`,
-    },
-    {
-      text: `📁 ${router.name}`,
-      callback_data: `history_files_${encodeURIComponent(router.name)}`,
-    },
-  ]);
-  
-  keyboard.push(...routerButtons);
-  
-  keyboard.push([
-    {
-      text: '⬅️ Kembali ke Menu',
-      callback_data: 'menu',
-    },
-  ]);
-  
-  await bot.sendMessage(chatId, '📈 **History & Statistics**\n\nPilih opsi:', {
-    reply_markup: {
-      inline_keyboard: keyboard,
-    },
-    parse_mode: 'Markdown',
-  });
-}
-
-async function sendStatistics(chatId, routerName = null) {
-  const stats = await getStatistics(routerName);
-  
-  console.log(`[sendStatistics] Stats for ${routerName || 'all'}:`, stats);
-  
-  if (stats.total === 0) {
-    // Debug: show what we're looking for
-    const history = await getHistory();
-    const debugInfo = routerName 
-      ? `\n\nDebug: Mencari router "${routerName}"\nTotal history: ${history.length}\n${history.length > 0 ? `Router names di history: ${history[0].routers?.map(r => `"${r.name}"`).join(', ') || 'none'}` : 'No history'}`
-      : `\n\nDebug: Total history records: ${history.length}`;
-    
-    await bot.sendMessage(
-      chatId,
-      (routerName
-        ? `Belum ada history backup untuk router "${routerName}".`
-        : 'Belum ada history backup.') + debugInfo
-    );
-    return;
-  }
-  
-  const title = routerName
-    ? `📊 **Statistics: ${routerName}**`
-    : '📊 **Statistics Keseluruhan**';
-  
-  const statsText = [
-    title,
-    '',
-    `Total Backup: ${stats.total}`,
-    `✅ Berhasil: ${stats.success}`,
-    `❌ Gagal: ${stats.failed}`,
-    `📈 Success Rate: ${stats.successRate}%`,
-  ];
-  
-    if (routerName) {
-    statsText.push('');
-    statsText.push(`⚠️ Gagal Berturut-turut: ${stats.consecutiveFailures}x`);
-    if (stats.lastBackup && stats.lastBackup.timestamp) {
-      statsText.push(
-        `✅ Backup Terakhir: ${formatDate(new Date(stats.lastBackup.timestamp), config.backup.timezone)}`
-      );
-    } else {
-      statsText.push('❌ Belum ada backup yang berhasil');
-    }
-  } else {
-    statsText.push('');
-    statsText.push(`📦 Total Backup Session: ${stats.totalBackups}`);
-  }
-  
-  await bot.sendMessage(chatId, statsText.join('\n'), { parse_mode: 'Markdown' });
-}
-
-async function sendHistoryDetail(chatId, routerName = null, limit = 10) {
-  if (!routerName) {
-    await bot.sendMessage(chatId, 'Pilih router terlebih dahulu untuk melihat history detail.');
-    return;
-  }
-  
-  const history = await getRouterHistory(routerName, limit);
-  
-  if (history.length === 0) {
-    await bot.sendMessage(chatId, `Belum ada history backup untuk router "${routerName}".`);
-    return;
-  }
-  
-  const historyLines = history.map((record, idx) => {
-    const date = formatDate(new Date(record.timestamp), config.backup.timezone);
-    const status = record.success ? '✅' : '❌';
-    const schedule = record.triggeredBySchedule ? '🕐' : '👤';
-    const error = record.error ? ` (${record.error})` : '';
-    return `${idx + 1}. ${status} ${schedule} ${date}${error}`;
-  });
-  
-  const historyText = [
-    `📋 **History Backup: ${routerName}**`,
-    '',
-    ...historyLines,
-    '',
-    `Menampilkan ${history.length} backup terakhir.`,
-  ].join('\n');
-  
-  await bot.sendMessage(chatId, historyText, { parse_mode: 'Markdown' });
-}
-
 async function sendBackupFilesList(chatId, routerName = null, page = 0) {
   const limit = 10;
   const offset = page * limit;
@@ -1430,12 +1297,9 @@ bot.on('callback_query', async (query) => {
     'backup_router',
     'history_files_all',
     'history_files',
-    'history_stats_all',
-    'history_stats',
-    'history_detail_router',
     'delete_backup',
     'files_page',
-  ].includes(action) || action.startsWith('history_files_') || action.startsWith('history_stats_');
+  ].includes(action) || action.startsWith('history_files_');
 
   if (isLongOperation) {
     try {
@@ -1586,15 +1450,7 @@ bot.on('callback_query', async (query) => {
         }
         break;
       default:
-        // Handle history_stats_<routerName> pattern
-        if (action.startsWith('history_stats_')) {
-          const routerName = action.replace('history_stats_', '');
-          if (routerName === 'all') {
-            await sendStatistics(chatId);
-          } else {
-            await sendStatistics(chatId, decodeURIComponent(routerName));
-          }
-        } else if (action.startsWith('history_files_')) {
+        if (action.startsWith('history_files_')) {
           // Handle history_files_<routerName> pattern
           const routerName = action.replace('history_files_', '');
           if (routerName === 'all') {
@@ -1771,10 +1627,8 @@ fs.ensureDirSync(config.backup.directory);
 // Load custom schedule on startup
 loadCustomSchedule().then(async () => {
   await scheduleJob();
-  console.log('Telegram bot berjalan. Tekan Ctrl+C untuk berhenti.');
 }).catch(async (err) => {
   console.error('Failed to load custom schedule on startup:', err);
   await scheduleJob();
-  console.log('Telegram bot berjalan. Tekan Ctrl+C untuk berhenti.');
 });
 
