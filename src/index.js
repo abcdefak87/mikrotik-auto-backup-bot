@@ -816,34 +816,32 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
   sessions.get(chatId).filePathMap = filePathMap;
   sessions.get(chatId).filePathMapExpiry = Date.now() + (5 * 60 * 1000); // 5 minutes expiry
   
-  // Add pagination buttons
+  // Add pagination and back buttons
+  const navRow = [];
+  
+  // Add "Kembali" button
+  navRow.push({
+    text: '⬅️ Kembali',
+    callback_data: routerName ? `files_${encodeURIComponent(routerName)}` : 'files_all',
+  });
+  
+  // Add pagination buttons if more than 1 page
   if (totalPages > 1) {
-    const paginationRow = [];
     if (page > 0) {
-      paginationRow.push({
+      navRow.push({
         text: '⬅️ Sebelumnya',
         callback_data: `files_page_${routerName ? encodeURIComponent(routerName) : 'all'}_${page - 1}`,
       });
     }
-    paginationRow.push({
-      text: `${page + 1}/${totalPages}`,
-      callback_data: 'noop',
-    });
     if (page < totalPages - 1) {
-      paginationRow.push({
+      navRow.push({
         text: 'Selanjutnya ➡️',
         callback_data: `files_page_${routerName ? encodeURIComponent(routerName) : 'all'}_${page + 1}`,
       });
     }
-    keyboard.push(paginationRow);
   }
   
-  keyboard.push([
-    {
-      text: '⬅️ Kembali',
-      callback_data: routerName ? `files_${encodeURIComponent(routerName)}` : 'files_all',
-    },
-  ]);
+  keyboard.push(navRow);
   
   const messageText = [
     title,
