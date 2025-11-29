@@ -172,6 +172,11 @@ const sendMainMenu = async (chatId) => {
         text: '🧪 Test Koneksi Router',
       },
     ],
+    [
+      {
+        text: '📁 File Backup',
+      },
+    ],
   ];
 
   await bot.sendMessage(chatId, 'Pilih menu:', {
@@ -598,6 +603,47 @@ async function sendHealthCheck(chatId) {
   ].join('\n');
   
   await bot.sendMessage(chatId, healthInfo, { parse_mode: 'Markdown' });
+}
+
+async function sendFileBackupMenu(chatId) {
+  const routers = await getRouters();
+  if (!routers.length) {
+    await bot.sendMessage(chatId, 'Belum ada router terdaftar.');
+    return;
+  }
+  
+  const keyboard = [
+    [
+      {
+        text: '📁 Semua Router',
+        callback_data: 'files_all',
+      },
+    ],
+  ];
+  
+  // Add router-specific buttons
+  const routerButtons = routers.map((router) => [
+    {
+      text: `📁 ${router.name}`,
+      callback_data: `files_${encodeURIComponent(router.name)}`,
+    },
+  ]);
+  
+  keyboard.push(...routerButtons);
+  
+  keyboard.push([
+    {
+      text: '⬅️ Kembali ke Menu',
+      callback_data: 'menu',
+    },
+  ]);
+  
+  await bot.sendMessage(chatId, '📁 **File Backup**\n\nPilih router untuk melihat file backup:', {
+    reply_markup: {
+      inline_keyboard: keyboard,
+    },
+    parse_mode: 'Markdown',
+  });
 }
 
 async function sendBackupFilesList(chatId, routerName = null, page = 0) {
