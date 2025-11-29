@@ -1370,12 +1370,46 @@ bot.on('callback_query', async (query) => {
   if (!query.message) return;
   const chatId = query.message.chat.id;
   if (!ensureChatAllowed(chatId)) {
-    await bot.answerCallbackQuery(query.id, { text: 'Tidak diizinkan.' });
+    try {
+      await bot.answerCallbackQuery(query.id, { text: 'Tidak diizinkan.' });
+    } catch (err) {
+      // Ignore expired query errors
+      if (err.code !== 'ETELEGRAM' || !err.message.includes('query is too old')) {
+        console.error('Error answering callback query:', err.message);
+      }
+    }
     return;
   }
 
   const { action, payload } = parseCallbackData(query.data);
 
+  // Answer callback query immediately to prevent timeout
+  // For operations that might take time, we'll answer with "Processing..."
+  const isLongOperation = [
+    'backup_all',
+    'backup_router',
+    'history_files_all',
+    'history_files',
+    'history_stats_all',
+    'history_stats',
+    'history_detail_router',
+    'delete_backup',
+    'files_page',
+  ].includes(action) || action.startsWith('history_files_') || action.startsWith('history_stats_');
+
+  if (isLongOperation) {
+    try {
+      await bot.answerCallbackQuery(query.id, { text: 'Memproses...' });
+    } catch (err) {
+      // Ignore expired query errors silently
+      if (err.code !== 'ETELEGRAM' || !err.message.includes('query is too old')) {
+        console.warn('Error answering callback query:', err.message);
+      }
+    }
+  } else {
+    // For quick operations, answer after completion
+  }
+  
   try {
     switch (action) {
       case 'menu':
