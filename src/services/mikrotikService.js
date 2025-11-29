@@ -113,12 +113,12 @@ async function performBackup(router) {
     try {
       await execCommand(conn, `/file remove "${remoteBackupFile}"`);
     } catch (err) {
-      console.warn(`Failed to remove remote backup file ${remoteBackupFile}:`, err.message);
+      // Silently fail - cleanup is optional
     }
     try {
       await execCommand(conn, `/file remove "${remoteExportFile}"`);
     } catch (err) {
-      console.warn(`Failed to remove remote export file ${remoteExportFile}:`, err.message);
+      // Silently fail - cleanup is optional
     }
 
     return {

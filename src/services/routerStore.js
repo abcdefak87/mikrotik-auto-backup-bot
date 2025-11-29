@@ -20,7 +20,7 @@ async function getRouters() {
     const routers = await fs.readJSON(routersPath);
     // Validate that it's an array
     if (!Array.isArray(routers)) {
-      console.warn('routers.json is not an array, resetting to empty array');
+      // Reset corrupted data silently
       await saveRouters([]);
       return [];
     }
@@ -28,7 +28,7 @@ async function getRouters() {
   } catch (err) {
     // If JSON is corrupted, reset to empty array
     if (err.name === 'SyntaxError' || err.code === 'ENOENT') {
-      console.warn('routers.json is corrupted or missing, resetting to empty array');
+      // Reset corrupted data silently
       await saveRouters([]);
       return [];
     }
@@ -49,7 +49,7 @@ async function saveRouters(list) {
     }
     await fs.rename(tempPath, routersPath);
   }).catch((err) => {
-    console.error('Error saving routers:', err);
+    // Error will be thrown and handled by caller
     // Clean up temp file if it exists
     fs.remove(`${routersPath}.tmp`).catch(() => {});
     throw err;
@@ -123,25 +123,16 @@ async function removeRouter(name) {
     writeQueue = writeQueue.then(async () => {
       try {
         const routers = await getRouters();
-        console.warn(`[removeRouter] Current routers count: ${routers.length}`);
-        console.warn(`[removeRouter] Looking for router: "${trimmedName}"`);
         
         // Use case-insensitive matching with trim (same as addRouter duplicate check)
         const filtered = routers.filter((r) => {
           if (!r.name) return true; // Keep routers without name (shouldn't happen, but safe)
           const routerName = r.name.trim().toLowerCase();
           const targetName = trimmedName.toLowerCase();
-          const matches = routerName === targetName;
-          if (matches) {
-            console.warn(`[removeRouter] Found matching router: "${r.name}" (original: "${r.name}")`);
-          }
-          return !matches; // Keep routers that don't match
+          return routerName !== targetName; // Keep routers that don't match
         });
         
-        console.warn(`[removeRouter] Filtered routers count: ${filtered.length}`);
-        
         if (filtered.length === routers.length) {
-          console.warn(`[removeRouter] Router not found. Available routers:`, routers.map(r => `"${r.name}"`).join(', '));
           throw new Error('Router tidak ditemukan');
         }
         
@@ -149,25 +140,17 @@ async function removeRouter(name) {
         // We're already inside the queue, so we can write directly
         await ensureStore();
         const tempPath = `${routersPath}.tmp`;
-        console.warn(`[removeRouter] Writing to temp file: ${tempPath}`);
         await fs.writeJSON(tempPath, filtered, { spaces: 2 });
-        console.warn(`[removeRouter] Temp file written, removing old file`);
         if (await fs.pathExists(routersPath)) {
           await fs.remove(routersPath);
         }
-        console.warn(`[removeRouter] Renaming temp file to routers.json`);
         await fs.rename(tempPath, routersPath);
-        console.warn(`[removeRouter] Router "${trimmedName}" successfully removed`);
         resolve();
       } catch (err) {
-        console.error(`[removeRouter] Error:`, err.message || err);
-        console.error(`[removeRouter] Error stack:`, err.stack);
         reject(err);
       }
     }).catch((err) => {
       // Catch any errors from the queue chain
-      console.error(`[removeRouter] Queue error:`, err.message || err);
-      console.error(`[removeRouter] Queue error stack:`, err.stack);
       reject(err);
     });
   });

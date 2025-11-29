@@ -132,7 +132,7 @@ async function deleteBackupFile(filePath) {
     await fs.remove(filePath);
     return true;
   } catch (err) {
-    console.error(`Failed to delete backup file ${filePath}:`, err);
+    // Error will be thrown and handled by caller
     throw err;
   }
 }

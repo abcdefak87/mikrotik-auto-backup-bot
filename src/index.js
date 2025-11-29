@@ -19,9 +19,7 @@ const {
 } = require('./services/backupFiles');
 
 if (!config.telegram.token) {
-  console.error(
-    'Missing TELEGRAM_BOT_TOKEN. Set it in telegram-bot/.env before running.'
-  );
+  logger.error('Missing TELEGRAM_BOT_TOKEN. Set it in telegram-bot/.env before running.');
   process.exit(1);
 }
 
@@ -62,7 +60,7 @@ async function loadCustomSchedule() {
       // Custom schedule loaded
     }
   } catch (err) {
-    console.warn('Failed to load custom schedule:', err.message);
+    logger.warn(`Failed to load custom schedule: ${err.message}`);
   }
 }
 
@@ -71,7 +69,7 @@ async function saveCustomSchedule() {
     await fs.ensureDir(path.dirname(scheduleFilePath));
     await fs.writeJSON(scheduleFilePath, { schedule: customSchedule }, { spaces: 2 });
   } catch (err) {
-    console.error('Failed to save custom schedule:', err.message);
+    logger.error('Failed to save custom schedule', err);
   }
 }
 
@@ -82,6 +80,29 @@ function sanitizeError(error) {
   // Remove password patterns from error messages
   return errorStr.replace(/password[=:]\s*['"]?[^'"]*['"]?/gi, 'password=***');
 }
+
+// Logging helper functions
+const logger = {
+  error: (message, error = null) => {
+    const timestamp = new Date().toISOString();
+    if (error) {
+      console.error(`[${timestamp}] ERROR: ${message}`, error.message || error);
+      if (error.stack && process.env.NODE_ENV !== 'production') {
+        console.error(error.stack);
+      }
+    } else {
+      console.error(`[${timestamp}] ERROR: ${message}`);
+    }
+  },
+  warn: (message) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[${timestamp}] WARN: ${message}`);
+  },
+  info: (message) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] INFO: ${message}`);
+  }
+};
 
 // Helper function to detect network errors
 function isNetworkError(err) {
@@ -237,7 +258,7 @@ async function findRouterByName(name) {
 
 async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   if (!chatId) {
-    console.warn('No chat ID available for backup delivery.');
+    logger.warn('No chat ID available for backup delivery.');
     return;
   }
 
@@ -268,7 +289,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   } catch (err) {
     // Only log if it's not a network error (to avoid spam)
     if (!isNetworkError(err)) {
-      console.error('Failed to send backup notification:', err.message || err);
+      logger.error('Failed to send backup notification', err);
     }
     // Continue with backup even if notification fails
   }
@@ -291,7 +312,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       } catch (docErr) {
         // Only log if it's not a network error (to avoid spam)
         if (!isNetworkError(docErr)) {
-          console.error(`Failed to send backup document for ${router.name}:`, docErr.message || docErr);
+          logger.error(`Failed to send backup document for ${router.name}`, docErr);
         }
         // Don't try to send error message if network is down (will fail again)
         if (!isNetworkError(docErr)) {
@@ -304,7 +325,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
           } catch (msgErr) {
             // Silently fail if network is down
             if (!isNetworkError(msgErr)) {
-              console.error('Failed to send error message:', msgErr.message || msgErr);
+              logger.error('Failed to send error message', msgErr);
             }
           }
         }
@@ -327,7 +348,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       } catch (docErr) {
         // Only log if it's not a network error (to avoid spam)
         if (!isNetworkError(docErr)) {
-          console.error(`Failed to send export document for ${router.name}:`, docErr.message || docErr);
+          logger.error(`Failed to send export document for ${router.name}`, docErr);
         }
         // Don't try to send error message if network is down (will fail again)
         if (!isNetworkError(docErr)) {
@@ -340,7 +361,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
           } catch (msgErr) {
             // Silently fail if network is down
             if (!isNetworkError(msgErr)) {
-              console.error('Failed to send error message:', msgErr.message || msgErr);
+              logger.error('Failed to send error message', msgErr);
             }
           }
         }
@@ -359,7 +380,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       const sanitizedError = sanitizeError(err);
       // Only log if it's not a network error (to avoid spam)
       if (!isNetworkError(err)) {
-        console.error('Backup error:', sanitizedError);
+        logger.error('Backup error', err);
       }
       const errorMessage = sanitizeError(err.message || 'Tidak diketahui');
       summary.push({
@@ -375,10 +396,10 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
             `[${router.name}] Backup gagal: ${errorMessage}`
           );
         } catch (msgErr) {
-          // Silently fail if network is down
-          if (!isNetworkError(msgErr)) {
-            console.error('Failed to send backup error message:', msgErr.message || msgErr);
-          }
+            // Silently fail if network is down
+            if (!isNetworkError(msgErr)) {
+              logger.error('Failed to send backup error message', msgErr);
+            }
         }
       }
     }
@@ -417,7 +438,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
           );
         } catch (alertErr) {
           if (!isNetworkError(alertErr)) {
-            console.error('Failed to send failure alert:', alertErr.message);
+            logger.error('Failed to send failure alert', alertErr);
           }
         }
       }
@@ -434,7 +455,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   } catch (err) {
     // Silently fail if network is down (to avoid spam)
     if (!isNetworkError(err)) {
-      console.error('Failed to send backup summary:', err.message || err);
+      logger.error('Failed to send backup summary', err);
     }
   }
 
@@ -486,7 +507,7 @@ async function sendBackupNotificationToGroup(summary, triggeredBySchedule = fals
   } catch (err) {
     // Silently fail if network is down (to avoid spam)
     if (!isNetworkError(err)) {
-      console.error('Failed to send backup notification to group:', err.message || err);
+      logger.error('Failed to send backup notification to group', err);
     }
   }
 }
@@ -507,9 +528,7 @@ function isValidTimezone(timezone) {
 
 async function scheduleJob(cronSchedule = null) {
   if (!config.telegram.defaultChatId) {
-    console.warn(
-      'TELEGRAM_DEFAULT_CHAT_ID belum diatur. Backup terjadwal tidak akan dikirim.'
-    );
+    logger.warn('TELEGRAM_DEFAULT_CHAT_ID belum diatur. Backup terjadwal tidak akan dikirim.');
     return;
   }
 
@@ -519,7 +538,7 @@ async function scheduleJob(cronSchedule = null) {
   // Validate and fix timezone
   let timezone = config.backup.timezone;
   if (!isValidTimezone(timezone)) {
-    console.warn(`Invalid timezone "${timezone}", falling back to "Asia/Jakarta"`);
+    logger.warn(`Invalid timezone "${timezone}", falling back to "Asia/Jakarta"`);
     timezone = 'Asia/Jakarta';
   }
   
@@ -538,9 +557,9 @@ async function scheduleJob(cronSchedule = null) {
       }
     );
   } catch (err) {
-    console.error(`Failed to schedule job with timezone "${timezone}":`, err.message);
+    logger.error(`Failed to schedule job with timezone "${timezone}"`, err);
     // Fallback to UTC if timezone fails
-    console.warn('Falling back to UTC timezone');
+    logger.warn('Falling back to UTC timezone');
     scheduledJob = cron.schedule(
       schedule,
       () => sendBackup(config.telegram.defaultChatId, true),
@@ -575,7 +594,7 @@ function getNextRunTime() {
     const next = expr.next();
     return next.toDate();
   } catch (err) {
-    console.error('Error calculating next run time:', err);
+    logger.error('Error calculating next run time', err);
     // Fallback to simple calculation for daily schedules
     try {
       const parts = schedule.trim().split(/\s+/);
@@ -662,10 +681,10 @@ async function sendStatusMessage(chatId) {
       await bot.sendMessage(chatId, `❌ Error saat menampilkan status: ${sanitizedMsg}`);
     } catch (sendErr) {
       if (!isNetworkError(sendErr)) {
-        console.error('Failed to send error message:', sendErr.message);
+        logger.error('Failed to send error message', sendErr);
       }
     }
-    console.error('Error in sendStatusMessage:', err);
+    logger.error('Error in sendStatusMessage', err);
   }
 }
 
@@ -970,7 +989,7 @@ async function startScheduleSettingFlow(chatId) {
       { parse_mode: 'HTML' }
     );
   } catch (err) {
-    console.error('Failed to send message in startScheduleSettingFlow:', err);
+    logger.error('Failed to send message in startScheduleSettingFlow', err);
     clearSession(chatId);
   }
 }
@@ -1051,7 +1070,7 @@ async function startAddRouterFlow(chatId) {
       'Tambah router baru.\nMasukkan nama router (contoh: kantor):'
     );
   } catch (err) {
-    console.error('Failed to send message in startAddRouterFlow:', err);
+    logger.error('Failed to send message in startAddRouterFlow', err);
     clearSession(chatId);
   }
 }
@@ -1101,7 +1120,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Nama router tidak boleh kosong. Silakan masukkan nama router:');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1110,7 +1129,7 @@ async function handleSessionInput(chatId, text) {
       try {
         await bot.sendMessage(chatId, 'Masukkan host/IP router (contoh: 192.168.88.1):');
       } catch (err) {
-        console.error('Failed to send message:', err);
+        // Silently fail - error already handled by try-catch
       }
       return;
     }
@@ -1119,7 +1138,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Host/IP tidak boleh kosong. Silakan masukkan host/IP router:');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1127,7 +1146,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Format host/IP tidak valid. Silakan masukkan IP address (contoh: 192.168.88.1) atau hostname (contoh: router.example.com):');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1136,7 +1155,7 @@ async function handleSessionInput(chatId, text) {
       try {
         await bot.sendMessage(chatId, 'Masukkan username router:');
       } catch (err) {
-        console.error('Failed to send message:', err);
+        // Silently fail - error already handled by try-catch
       }
       return;
     }
@@ -1145,7 +1164,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Username tidak boleh kosong. Silakan masukkan username router:');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1154,7 +1173,7 @@ async function handleSessionInput(chatId, text) {
       try {
         await bot.sendMessage(chatId, 'Masukkan password router:');
       } catch (err) {
-        console.error('Failed to send message:', err);
+        // Silently fail - error already handled by try-catch
       }
       return;
     }
@@ -1163,7 +1182,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Password tidak boleh kosong. Silakan masukkan password router:');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1175,7 +1194,7 @@ async function handleSessionInput(chatId, text) {
           'Masukkan port SSH (tekan Enter untuk default 22):'
         );
       } catch (err) {
-        console.error('Failed to send message:', err);
+        // Silently fail - error already handled by try-catch
       }
       return;
     }
@@ -1185,7 +1204,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Port tidak valid. Masukkan angka antara 1-65535.');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1196,21 +1215,20 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Data router tidak lengkap. Silakan mulai lagi.');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         clearSession(chatId);
         try {
           await sendMainMenu(chatId);
         } catch (err) {
-          console.error('Failed to send main menu:', err);
+          logger.error('Failed to send main menu', err);
         }
         return;
       }
       
       try {
-        console.warn(`[addRouter] Attempting to add router: "${session.data.name}"`);
         await addRouter(session.data);
-        console.warn(`[addRouter] Router "${session.data.name}" successfully added`);
+        logger.info(`Router "${session.data.name}" berhasil ditambahkan`);
         try {
           await bot.sendMessage(
             chatId,
@@ -1218,12 +1236,10 @@ async function handleSessionInput(chatId, text) {
             { parse_mode: 'HTML' }
           );
         } catch (err) {
-          console.error('Failed to send success message:', err);
+          logger.error('Failed to send success message', err);
         }
       } catch (err) {
-        console.error('[addRouter] Error adding router:', err);
-        console.error('[addRouter] Error message:', err.message);
-        console.error('[addRouter] Error stack:', err.stack);
+        logger.error('Failed to add router', err);
         try {
           const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
           await bot.sendMessage(
@@ -1232,14 +1248,14 @@ async function handleSessionInput(chatId, text) {
             { parse_mode: 'HTML' }
           );
         } catch (sendErr) {
-          console.error('Failed to send error message:', sendErr);
+          logger.error('Failed to send error message', sendErr);
         }
       } finally {
         clearSession(chatId);
         try {
           await sendMainMenu(chatId);
         } catch (err) {
-          console.error('Failed to send main menu:', err);
+          logger.error('Failed to send main menu', err);
         }
       }
     }
@@ -1251,7 +1267,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, 'Waktu tidak boleh kosong. Silakan masukkan waktu dalam format HH:MM:\nContoh: 18:00');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1262,7 +1278,7 @@ async function handleSessionInput(chatId, text) {
         try {
           await bot.sendMessage(chatId, '❌ Format waktu tidak valid.\n\nGunakan format: **HH:MM** (24 jam)\n\nContoh:\n- `18:00` = Setiap hari jam 18:00\n- `09:30` = Setiap hari jam 09:30\n\nSilakan masukkan lagi:');
         } catch (err) {
-          console.error('Failed to send message:', err);
+          // Silently fail - error already handled by try-catch
         }
         return;
       }
@@ -1289,13 +1305,13 @@ async function handleSessionInput(chatId, text) {
           try {
             await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: **${value}** (setiap hari)\nAuto backup akan menggunakan jadwal baru ini.`);
           } catch (err) {
-            console.error('Failed to send message:', err);
+            // Silently fail - error already handled by try-catch
           }
         } else {
           try {
             await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: **${value}** (setiap hari)\nAktifkan auto backup untuk menggunakan jadwal ini.`);
           } catch (err) {
-            console.error('Failed to send message:', err);
+            // Silently fail - error already handled by try-catch
           }
         }
       } catch (err) {
@@ -1303,7 +1319,7 @@ async function handleSessionInput(chatId, text) {
           const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
           await bot.sendMessage(chatId, `❌ Gagal mengatur jadwal: ${sanitizedMsg}\nSilakan coba lagi dengan format HH:MM`);
         } catch (sendErr) {
-          console.error('Failed to send message:', sendErr);
+          logger.error('Failed to send message', sendErr);
         }
         return;
       }
@@ -1312,7 +1328,7 @@ async function handleSessionInput(chatId, text) {
       try {
         await sendAutoBackupSettings(chatId);
       } catch (err) {
-        console.error('Failed to send auto backup settings:', err);
+        logger.error('Failed to send auto backup settings', err);
       }
     }
   }
@@ -1372,7 +1388,7 @@ bot.onText(/\/get_chat_id\b/, async (msg) => {
     await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
   } catch (err) {
     // Log error for debugging
-    console.error('Failed to send chat ID info:', err.message || err);
+      logger.error('Failed to send chat ID info', err);
     // Try to send a simpler message if HTML fails
     try {
       await bot.sendMessage(
@@ -1380,7 +1396,7 @@ bot.onText(/\/get_chat_id\b/, async (msg) => {
         `Chat ID: ${chatIdStr}\n\nGunakan Chat ID ini untuk TELEGRAM_GROUP_CHAT_ID di file .env`
       );
     } catch (err2) {
-      console.error('Failed to send fallback chat ID message:', err2.message || err2);
+        logger.error('Failed to send fallback chat ID message', err2);
     }
   }
 });
@@ -1466,7 +1482,7 @@ bot.on('callback_query', async (query) => {
     } catch (err) {
       // Ignore expired query errors
       if (err.code !== 'ETELEGRAM' || !err.message.includes('query is too old')) {
-        console.error('Error answering callback query:', err.message);
+        logger.error('Error answering callback query', err);
       }
     }
     return;
@@ -1537,25 +1553,19 @@ bot.on('callback_query', async (query) => {
       case 'remove_router':
         if (payload) {
           try {
-            // Log for debugging
-            console.warn(`[index.js] Attempting to remove router: "${payload}"`);
-            const result = await removeRouter(payload);
-            console.warn(`[index.js] removeRouter returned:`, result);
-            console.warn(`[index.js] Router "${payload}" successfully removed`);
+            await removeRouter(payload);
+            logger.info(`Router "${payload}" berhasil dihapus`);
             await bot.sendMessage(chatId, `✅ Router "${formatHtml(payload)}" dihapus.`, { parse_mode: 'HTML' });
             // Answer callback query after successful removal
             try {
               await bot.answerCallbackQuery(query.id, { text: 'Router dihapus' });
             } catch (answerErr) {
               if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
-                console.warn('Error answering callback query:', answerErr.message);
+                logger.warn(`Failed to answer callback query: ${answerErr.message}`);
               }
             }
           } catch (err) {
-            // Log error for debugging
-            console.error('[index.js] Error removing router:', err);
-            console.error('[index.js] Error message:', err.message);
-            console.error('[index.js] Error stack:', err.stack);
+            logger.error('Failed to remove router', err);
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
             try {
               await bot.sendMessage(
@@ -1564,14 +1574,14 @@ bot.on('callback_query', async (query) => {
                 { parse_mode: 'HTML' }
               );
             } catch (sendErr) {
-              console.error('[index.js] Failed to send error message:', sendErr.message);
+              logger.error('Failed to send error message', sendErr);
             }
             // Answer callback query even on error
             try {
               await bot.answerCallbackQuery(query.id, { text: 'Gagal menghapus router' });
             } catch (answerErr) {
               if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
-                console.warn('Error answering callback query:', answerErr.message);
+                logger.warn(`Failed to answer callback query: ${answerErr.message}`);
               }
             }
           }
@@ -1581,7 +1591,7 @@ bot.on('callback_query', async (query) => {
             await bot.answerCallbackQuery(query.id, { text: 'Router tidak ditemukan' });
           } catch (answerErr) {
             if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
-              console.warn('Error answering callback query:', answerErr.message);
+                logger.warn(`Failed to answer callback query: ${answerErr.message}`);
             }
           }
         }
@@ -1708,7 +1718,7 @@ bot.on('callback_query', async (query) => {
         await bot.sendMessage(chatId, `❌ Error: ${sanitizedMsg}`);
       } catch (sendErr) {
         if (!isNetworkError(sendErr)) {
-          console.error('Error sending error message:', sendErr.message);
+          logger.error('Error sending error message', sendErr);
         }
       }
       
@@ -1719,7 +1729,7 @@ bot.on('callback_query', async (query) => {
         } catch (answerErr) {
           // Ignore expired query errors
           if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
-            console.warn('Error answering callback query on error:', answerErr.message);
+            logger.warn(`Failed to answer callback query on error: ${answerErr.message}`);
           }
         }
       }
@@ -1826,21 +1836,21 @@ bot.on('polling_error', (err) => {
     // Handle different types of errors
     if (isNetworkError(err)) {
       if (pollingErrorCount === 1) {
-        console.error('Network error detected. Bot will continue polling...');
+        logger.warn('Network error detected. Bot will continue polling...');
       } else {
-        console.warn(`Network error (${pollingErrorCount}x). Bot continues polling...`);
+        logger.warn(`Network error (${pollingErrorCount}x). Bot continues polling...`);
       }
       // Bot will automatically retry polling
     } else if (err.response && err.response.statusCode === 429) {
       // Rate limit error
       const retryAfter = err.response.headers['retry-after'] || 60;
-      console.error(`Rate limit exceeded. Will retry after ${retryAfter} seconds.`);
+      logger.warn(`Rate limit exceeded. Will retry after ${retryAfter} seconds.`);
       pollingErrorCount = 0; // Reset counter for rate limit
     } else {
       if (pollingErrorCount === 1) {
-        console.error('Polling error:', err.message || err);
+        logger.error('Polling error', err);
       } else {
-        console.warn(`Polling error (${pollingErrorCount}x):`, err.message || 'Unknown error');
+        logger.warn(`Polling error (${pollingErrorCount}x): ${err.message || 'Unknown error'}`);
       }
     }
     pollingErrorLastLog = now;
@@ -1849,7 +1859,7 @@ bot.on('polling_error', (err) => {
 
 // Handle webhook errors if using webhook mode
 bot.on('error', (err) => {
-  console.error('Bot error:', err);
+  logger.error('Bot error', err);
 });
 
 fs.ensureDirSync(config.backup.directory);
@@ -1858,7 +1868,7 @@ fs.ensureDirSync(config.backup.directory);
 loadCustomSchedule().then(async () => {
   await scheduleJob();
 }).catch(async (err) => {
-  console.error('Failed to load custom schedule on startup:', err);
+  logger.error('Failed to load custom schedule on startup', err);
   await scheduleJob();
 });
 
