@@ -17,7 +17,7 @@ const {
   deleteBackupPair,
   formatFileSize,
 } = require('./services/backupFiles');
-const { createToken } = require('./services/downloadTokens');
+const { createRouterToken } = require('./services/downloadTokens');
 const { startDownloadServer } = require('./services/downloadServer');
 
 if (!config.telegram.token) {
@@ -491,17 +491,14 @@ async function sendBackupNotificationToGroup(summary, triggeredBySchedule = fals
       // Generate download links if download server is enabled
       if (config.downloadServer.enabled && r.backupPath && r.exportPath) {
         try {
-          const backupToken = await createToken(r.backupPath, r.backupFileName, r.name);
-          const exportToken = await createToken(r.exportPath, r.exportFileName, r.name);
+          const routerToken = await createRouterToken(r.name);
           
-          const backupUrl = `${config.downloadServer.baseUrl}/download?token=${backupToken.token}&pass=${backupToken.password}`;
-          const exportUrl = `${config.downloadServer.baseUrl}/download?token=${exportToken.token}&pass=${exportToken.password}`;
+          const downloadUrl = `${config.downloadServer.baseUrl}/download?token=${routerToken.token}`;
           
           downloadLinks.push(
             `\n📡 <b>${formatHtml(r.name)}:</b>`,
-            `  • <a href="${backupUrl}">Download Backup (.backup)</a>`,
-            `  • <a href="${exportUrl}">Download Export (.rsc)</a>`,
-            `  🔑 Password: <code>${backupToken.password}</code>`
+            `  • <a href="${downloadUrl}">Download Backup</a>`,
+            `  🔑 Password: <code>${routerToken.password}</code>`
           );
         } catch (err) {
           logger.error(`Failed to create download token for ${r.name}`, err);
@@ -529,7 +526,6 @@ async function sendBackupNotificationToGroup(summary, triggeredBySchedule = fals
     routerStatusList.join('\n'),
     downloadLinks.length > 0 ? '\n<b>🔗 Download Link:</b>' : '',
     ...downloadLinks,
-    downloadLinks.length > 0 ? '\n⏰ Link berlaku 24 jam' : '',
   ]
     .filter(Boolean)
     .join('\n');

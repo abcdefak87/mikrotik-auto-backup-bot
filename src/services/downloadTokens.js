@@ -5,8 +5,8 @@ const fs = require('fs-extra');
 const tokensDir = path.join(__dirname, '..', '..', 'data', 'downloadTokens');
 const tokensFile = path.join(tokensDir, 'tokens.json');
 
-// Token expiry: 24 hours
-const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
+// Token tidak expire (permanent)
+// const TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000;
 
 let tokensCache = null;
 
@@ -41,22 +41,10 @@ async function getTokens() {
   return tokensCache;
 }
 
-// Clean expired tokens
+// Clean expired tokens (no longer needed since tokens don't expire)
 async function cleanExpiredTokens() {
-  const tokens = await getTokens();
-  const now = Date.now();
-  let cleaned = false;
-  
-  for (const [token, data] of Object.entries(tokens)) {
-    if (data.expiresAt && data.expiresAt < now) {
-      delete tokens[token];
-      cleaned = true;
-    }
-  }
-  
-  if (cleaned) {
-    await saveTokens(tokens);
-  }
+  // Tokens are now permanent, no cleanup needed
+  // But keep function for backward compatibility
 }
 
 // Generate random token
@@ -74,26 +62,45 @@ function generatePassword() {
   return password;
 }
 
-// Create download token for a file
-async function createToken(filePath, fileName, routerName) {
+// Create download token for a router (not per file, permanent)
+async function createRouterToken(routerName, password) {
   await cleanExpiredTokens();
   
   const tokens = await getTokens();
+  
+  // Check if token already exists for this router
+  let existingToken = null;
+  for (const [token, data] of Object.entries(tokens)) {
+    if (data.routerName === routerName && !data.expiresAt) {
+      existingToken = token;
+      // Update password if provided
+      if (password) {
+        tokens[token].password = password;
+        await saveTokens(tokens);
+      }
+      return { token: existingToken, password: tokens[token].password };
+    }
+  }
+  
+  // Create new token if doesn't exist
   const token = generateToken();
-  const password = generatePassword();
-  const expiresAt = Date.now() + TOKEN_EXPIRY_MS;
+  const tokenPassword = password || generatePassword();
   
   tokens[token] = {
-    filePath,
-    fileName,
     routerName,
-    password,
+    password: tokenPassword,
     createdAt: Date.now(),
-    expiresAt,
+    // No expiresAt - permanent token
   };
   
   await saveTokens(tokens);
-  return { token, password };
+  return { token, password: tokenPassword };
+}
+
+// Legacy function for backward compatibility (creates router token)
+async function createToken(filePath, fileName, routerName) {
+  // For backward compatibility, create router token
+  return await createRouterToken(routerName);
 }
 
 // Verify token and password
@@ -107,6 +114,7 @@ async function verifyToken(token, password) {
     return null; // Token not found
   }
   
+  // Check expiry only if expiresAt exists (for backward compatibility)
   if (tokenData.expiresAt && tokenData.expiresAt < Date.now()) {
     // Token expired, remove it
     delete tokens[token];
@@ -121,6 +129,27 @@ async function verifyToken(token, password) {
   return tokenData;
 }
 
+// Verify token only (for password prompt page)
+async function verifyTokenOnly(token) {
+  await cleanExpiredTokens();
+  
+  const tokens = await getTokens();
+  const tokenData = tokens[token];
+  
+  if (!tokenData) {
+    return null; // Token not found
+  }
+  
+  // Check expiry only if expiresAt exists
+  if (tokenData.expiresAt && tokenData.expiresAt < Date.now()) {
+    delete tokens[token];
+    await saveTokens(tokens);
+    return null;
+  }
+  
+  return tokenData;
+}
+
 // Cleanup expired tokens periodically (every hour)
 setInterval(() => {
   cleanExpiredTokens().catch(err => {
@@ -130,7 +159,9 @@ setInterval(() => {
 
 module.exports = {
   createToken,
+  createRouterToken,
   verifyToken,
+  verifyTokenOnly,
   cleanExpiredTokens,
 };
 
