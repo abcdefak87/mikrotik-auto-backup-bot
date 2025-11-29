@@ -3,6 +3,10 @@ const fs = require('fs-extra');
 const config = require('../config');
 const { format, parse } = require('date-fns');
 
+// Safe name for file system (same as mikrotikService)
+const safeName = (name = 'router') =>
+  name.replace(/[^a-zA-Z0-9-_]/g, '_') || 'router';
+
 // Parse timestamp from filename: routerName_backup_yyyyMMdd_HHmmss.backup
 function parseTimestampFromFilename(filename) {
   const match = filename.match(/_(\d{8}_\d{6})\./);
