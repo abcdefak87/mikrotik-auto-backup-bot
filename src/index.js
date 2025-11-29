@@ -538,16 +538,22 @@ async function sendStatusMessage(chatId) {
     const routerLines = routers.length
       ? routers
           .map(
-            (r) => `- ${escapeMarkdown(r.name)}: ${escapeMarkdown(r.host)}:${r.port || 22} (${escapeMarkdown(r.username)})`
+            (r) => {
+              const name = r.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              const host = r.host.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              const username = r.username.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              return `• ${name}: ${host}:${r.port || 22} (${username})`;
+            }
           )
           .join('\n')
-      : '- Belum ada router';
+      : '• Belum ada router';
 
     const lastSummary = lastBackupMeta?.routers
       ?.map(
         (r) => {
-          const errorMsg = r.error ? sanitizeError(r.error) : 'Tidak diketahui';
-          return `  * ${escapeMarkdown(r.name)}: ${r.success ? '✅ Berhasil' : `❌ ${escapeMarkdown(errorMsg)}`}`;
+          const name = r.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const errorMsg = r.error ? sanitizeError(r.error).replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'Tidak diketahui';
+          return `  • ${name}: ${r.success ? '✅ Berhasil' : `❌ ${errorMsg}`}`;
         }
       )
       .join('\n');
@@ -565,7 +571,7 @@ async function sendStatusMessage(chatId) {
       `📊 <b>Status Backup</b>`,
       '',
       `📦 <b>Total Router:</b> ${routers.length}`,
-      routerLines.replace(/\*/g, '•').replace(/\-/g, '•'), // Replace markdown bullets with plain bullets
+      routerLines,
       '',
       `📁 <b>Folder Lokal:</b>`,
       `<code>${config.backup.directory.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>`,
@@ -575,7 +581,7 @@ async function sendStatusMessage(chatId) {
       '',
       `🕐 <b>Backup Terakhir:</b>`,
       lastBackupTime.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
-      lastSummary ? `\n📋 <b>Ringkasan Terakhir:</b>\n${lastSummary.replace(/\*/g, '•').replace(/</g, '&lt;').replace(/>/g, '&gt;')}` : '',
+      lastSummary ? `\n📋 <b>Ringkasan Terakhir:</b>\n${lastSummary}` : '',
       '',
       `⏭️ <b>Backup Berikutnya:</b>`,
       nextRunTime.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
