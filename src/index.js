@@ -32,6 +32,7 @@ const bot = new TelegramBot(config.telegram.token, { polling: true });
 let lastBackupMeta = null;
 let scheduledJob = null;
 const sessions = new Map();
+let customSchedule = null; // Store custom schedule set by user
 
 const formatDate = (date) =>
   date
@@ -220,7 +221,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   );
 }
 
-function scheduleJob() {
+function scheduleJob(cronSchedule = null) {
   if (!config.telegram.defaultChatId) {
     console.warn(
       'TELEGRAM_DEFAULT_CHAT_ID belum diatur. Backup terjadwal tidak akan dikirim.'
@@ -228,24 +229,44 @@ function scheduleJob() {
     return;
   }
 
+  // Use custom schedule if set, otherwise use default from config
+  const schedule = cronSchedule || customSchedule || config.backup.cronSchedule;
+  
+  // Stop existing job if any
+  if (scheduledJob) {
+    scheduledJob.stop();
+    scheduledJob = null;
+  }
+
   scheduledJob = cron.schedule(
-    config.backup.cronSchedule,
+    schedule,
     () => sendBackup(config.telegram.defaultChatId, true),
     {
       timezone: config.backup.timezone,
     }
   );
 
+  // Store custom schedule
+  if (cronSchedule) {
+    customSchedule = cronSchedule;
+  }
+
   console.log(
-    `Backup otomatis aktif setiap "${config.backup.cronSchedule}" (${config.backup.timezone})`
+    `Backup otomatis aktif setiap "${schedule}" (${config.backup.timezone})`
   );
 }
 
 function getNextRunTime() {
   if (!scheduledJob) return null;
   try {
-    return scheduledJob.nextDates().toDate();
+    // node-cron v4: nextDates() returns an array, get first date
+    const nextDates = scheduledJob.nextDates(1);
+    if (nextDates && nextDates.length > 0) {
+      return nextDates[0].toDate();
+    }
+    return null;
   } catch (err) {
+    console.error('Error getting next run time:', err);
     return null;
   }
 }
@@ -308,15 +329,21 @@ async function sendAutoBackupSettings(chatId) {
   const routers = await getRouters();
   const isEnabled = scheduledJob !== null;
   const nextRun = getNextRunTime();
+  const currentSchedule = customSchedule || config.backup.cronSchedule;
   
   const statusText = isEnabled 
-    ? `✅ Aktif\nJadwal: ${config.backup.cronSchedule}\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun) : 'Tidak diketahui'}`
-    : '❌ Nonaktif\nBelum ada jadwal backup otomatis yang diatur.';
+    ? `✅ Aktif\nJadwal: ${currentSchedule}\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun) : 'Tidak diketahui'}`
+    : `❌ Nonaktif\nJadwal: ${currentSchedule}\nTimezone: ${config.backup.timezone}\nBelum ada jadwal backup otomatis yang diaktifkan.`;
 
   const keyboard = [
     [
       {
         text: isEnabled ? '⏸️ Nonaktifkan Auto Backup' : '▶️ Aktifkan Auto Backup',
+      },
+    ],
+    [
+      {
+        text: '🕐 Atur Jadwal Backup',
       },
     ],
     [
@@ -337,6 +364,24 @@ async function sendAutoBackupSettings(chatId) {
       },
     }
   );
+}
+
+async function startScheduleSettingFlow(chatId) {
+  clearSession(chatId);
+  sessions.set(chatId, {
+    action: 'set_schedule',
+    step: 'cron',
+    data: {},
+  });
+  try {
+    await bot.sendMessage(
+      chatId,
+      'Atur jadwal backup otomatis.\n\nFormat cron: * * * * *\n(menit jam hari bulan hari-minggu)\n\nContoh:\n- `0 18 * * *` = Setiap hari jam 18:00\n- `0 0 * * 0` = Setiap Minggu jam 00:00\n- `0 0 1 * *` = Setiap tanggal 1 setiap bulan\n\nMasukkan format cron:'
+    );
+  } catch (err) {
+    console.error('Failed to send message in startScheduleSettingFlow:', err);
+    clearSession(chatId);
+  }
 }
 
 async function sendRouterSelection(chatId, action, emptyMessage) {
@@ -523,6 +568,68 @@ async function handleSessionInput(chatId, text) {
         } catch (err) {
           console.error('Failed to send main menu:', err);
         }
+      }
+    }
+  }
+  
+  if (session.action === 'set_schedule') {
+    if (session.step === 'cron') {
+      if (!value) {
+        try {
+          await bot.sendMessage(chatId, 'Format cron tidak boleh kosong. Silakan masukkan format cron:');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
+      
+      // Validate cron format (basic validation)
+      const cronParts = value.trim().split(/\s+/);
+      if (cronParts.length !== 5) {
+        try {
+          await bot.sendMessage(chatId, 'Format cron tidak valid. Format harus: * * * * *\n(menit jam hari bulan hari-minggu)\n\nContoh: 0 18 * * *\nSilakan masukkan lagi:');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
+      
+      try {
+        // Test if cron expression is valid by trying to create a schedule
+        const testSchedule = cron.schedule(value, () => {}, { timezone: config.backup.timezone });
+        testSchedule.stop();
+        
+        // If valid, update schedule
+        customSchedule = value;
+        if (scheduledJob) {
+          // Restart with new schedule
+          scheduleJob(value);
+          try {
+            await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: ${value}\nAuto backup akan menggunakan jadwal baru ini.`);
+          } catch (err) {
+            console.error('Failed to send message:', err);
+          }
+        } else {
+          try {
+            await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: ${value}\nAktifkan auto backup untuk menggunakan jadwal ini.`);
+          } catch (err) {
+            console.error('Failed to send message:', err);
+          }
+        }
+      } catch (err) {
+        try {
+          await bot.sendMessage(chatId, `❌ Format cron tidak valid: ${err.message}\nSilakan masukkan format cron yang benar:\nContoh: 0 18 * * *`);
+        } catch (sendErr) {
+          console.error('Failed to send message:', sendErr);
+        }
+        return;
+      }
+      
+      clearSession(chatId);
+      try {
+        await sendAutoBackupSettings(chatId);
+      } catch (err) {
+        console.error('Failed to send auto backup settings:', err);
       }
     }
   }
@@ -751,6 +858,9 @@ bot.on('message', async (msg) => {
           await bot.sendMessage(chatId, 'ℹ️ Auto backup sudah dalam keadaan nonaktif.');
         }
         await sendAutoBackupSettings(chatId);
+        return;
+      case '🕐 Atur Jadwal Backup':
+        await startScheduleSettingFlow(chatId);
         return;
       case '📋 Daftar Router':
         await sendRouterListMessage(chatId);
