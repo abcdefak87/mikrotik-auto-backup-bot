@@ -122,7 +122,7 @@ const formatDate = (date, timezone = 'Asia/Jakarta') =>
       }).format(date)
     : '-';
 
-// Escape special characters for Markdown
+// Escape special characters for Markdown (don't escape dots and dashes in numbers/dates)
 function escapeMarkdown(text) {
   if (!text) return '';
   return String(text)
@@ -137,13 +137,12 @@ function escapeMarkdown(text) {
     .replace(/\>/g, '\\>')
     .replace(/\#/g, '\\#')
     .replace(/\+/g, '\\+')
-    .replace(/\-/g, '\\-')
     .replace(/\=/g, '\\=')
     .replace(/\|/g, '\\|')
     .replace(/\{/g, '\\{')
     .replace(/\}/g, '\\}')
-    .replace(/\./g, '\\.')
     .replace(/\!/g, '\\!');
+    // Don't escape dots (.) and dashes (-) as they're needed for dates, times, IPs, etc.
 }
 
 const parseArgs = (text) => text.split(/\s+/).slice(1).filter(Boolean);
@@ -561,29 +560,30 @@ async function sendStatusMessage(chatId) {
       ? formatDate(nextRun, config.backup.timezone)
       : '❌ Tidak terjadwal / menunggu konfigurasi';
 
+    // Use HTML mode instead of Markdown for better compatibility
     const response = [
-      `📊 *Status Backup*`,
+      `📊 <b>Status Backup</b>`,
       '',
-      `📦 *Total Router:* ${routers.length}`,
-      routerLines,
+      `📦 <b>Total Router:</b> ${routers.length}`,
+      routerLines.replace(/\*/g, '•').replace(/\-/g, '•'), // Replace markdown bullets with plain bullets
       '',
-      `📁 *Folder Lokal:*`,
-      `\`${escapeMarkdown(config.backup.directory)}\``,
+      `📁 <b>Folder Lokal:</b>`,
+      `<code>${config.backup.directory.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>`,
       '',
-      `⏰ *Jadwal Backup:*`,
-      `${escapeMarkdown(scheduleTime)} (${escapeMarkdown(config.backup.timezone)})`,
+      `⏰ <b>Jadwal Backup:</b>`,
+      `${scheduleTime.replace(/</g, '&lt;').replace(/>/g, '&gt;')} (${config.backup.timezone.replace(/</g, '&lt;').replace(/>/g, '&gt;')})`,
       '',
-      `🕐 *Backup Terakhir:*`,
-      escapeMarkdown(lastBackupTime),
-      lastSummary ? `\n📋 *Ringkasan Terakhir:*\n${lastSummary}` : '',
+      `🕐 <b>Backup Terakhir:</b>`,
+      lastBackupTime.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      lastSummary ? `\n📋 <b>Ringkasan Terakhir:</b>\n${lastSummary.replace(/\*/g, '•').replace(/</g, '&lt;').replace(/>/g, '&gt;')}` : '',
       '',
-      `⏭️ *Backup Berikutnya:*`,
-      escapeMarkdown(nextRunTime),
+      `⏭️ <b>Backup Berikutnya:</b>`,
+      nextRunTime.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
     ]
       .filter(Boolean)
       .join('\n');
 
-    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, response, { parse_mode: 'HTML' });
   } catch (err) {
     const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
     try {
