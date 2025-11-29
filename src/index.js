@@ -358,15 +358,24 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
 
   // Save to backup history
   try {
-    await addBackupRecord({
+    console.log(`[sendBackup] Attempting to save history. Summary:`, JSON.stringify(summary, null, 2));
+    const result = await addBackupRecord({
       timestamp: timestamp.toISOString(),
       triggeredBySchedule,
       routers: summary,
     });
-    console.log(`Backup history saved: ${summary.length} routers, timestamp: ${timestamp.toISOString()}`);
+    console.log(`[sendBackup] Backup history saved successfully: ${summary.length} routers, timestamp: ${timestamp.toISOString()}`);
+    
+    // Verify it was saved
+    const verifyHistory = await getHistory();
+    console.log(`[sendBackup] Verification: History now has ${verifyHistory.length} records`);
+    if (verifyHistory.length > 0) {
+      console.log(`[sendBackup] Latest record routers:`, verifyHistory[0].routers?.map(r => r.name) || 'none');
+    }
   } catch (err) {
-    console.error('Failed to save backup history:', err.message);
-    console.error('Error details:', err);
+    console.error('[sendBackup] Failed to save backup history:', err.message);
+    console.error('[sendBackup] Error details:', err);
+    console.error('[sendBackup] Error stack:', err.stack);
   }
 
   // Update failure counts and check for alerts
