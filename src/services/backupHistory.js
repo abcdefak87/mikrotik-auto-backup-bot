@@ -40,16 +40,27 @@ async function saveHistory(list) {
   await ensureStore();
   // Use queue to prevent concurrent writes (race condition fix)
   writeQueue = writeQueue.then(async () => {
-    // Write to temporary file first, then rename (atomic operation)
-    const tempPath = `${historyPath}.tmp`;
-    await fs.writeJSON(tempPath, list, { spaces: 2 });
-    // Use rename for atomic operation (works on most filesystems)
-    if (await fs.pathExists(historyPath)) {
-      await fs.remove(historyPath);
+    try {
+      console.log(`[saveHistory] Writing ${list.length} records to history file`);
+      // Write to temporary file first, then rename (atomic operation)
+      const tempPath = `${historyPath}.tmp`;
+      await fs.writeJSON(tempPath, list, { spaces: 2 });
+      console.log(`[saveHistory] Temp file written: ${tempPath}`);
+      // Use rename for atomic operation (works on most filesystems)
+      if (await fs.pathExists(historyPath)) {
+        await fs.remove(historyPath);
+      }
+      await fs.rename(tempPath, historyPath);
+      console.log(`[saveHistory] History file saved successfully: ${historyPath}`);
+    } catch (err) {
+      console.error('[saveHistory] Error saving history:', err);
+      console.error('[saveHistory] Error stack:', err.stack);
+      // Clean up temp file if it exists
+      await fs.remove(`${historyPath}.tmp`).catch(() => {});
+      throw err;
     }
-    await fs.rename(tempPath, historyPath);
   }).catch((err) => {
-    console.error('Error saving backup history:', err);
+    console.error('[saveHistory] Queue error:', err);
     // Clean up temp file if it exists
     fs.remove(`${historyPath}.tmp`).catch(() => {});
     throw err;
@@ -81,13 +92,26 @@ async function addBackupRecord(record) {
         if (history.length > 1000) {
           history.splice(1000);
         }
+        console.log(`[addBackupRecord] About to save ${history.length} records`);
         await saveHistory(history);
         console.log(`[addBackupRecord] History saved successfully. New length: ${history.length}`);
+        
+        // Verify save by reading back
+        const verifyHistory = await getHistory();
+        console.log(`[addBackupRecord] Verification read: ${verifyHistory.length} records`);
+        if (verifyHistory.length !== history.length) {
+          console.error(`[addBackupRecord] WARNING: History length mismatch! Expected ${history.length}, got ${verifyHistory.length}`);
+        }
+        
         resolve(record);
       } catch (err) {
         console.error(`[addBackupRecord] Error saving history:`, err);
+        console.error(`[addBackupRecord] Error stack:`, err.stack);
         reject(err);
       }
+    }).catch((err) => {
+      console.error(`[addBackupRecord] Queue promise error:`, err);
+      reject(err);
     });
   });
 }
