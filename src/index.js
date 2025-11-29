@@ -428,10 +428,10 @@ function getNextRunTime() {
   const schedule = customSchedule || config.backup.cronSchedule;
   
   try {
-    const parser = require('cron-parser');
+    const { parseExpression } = require('cron-parser');
     const timezone = config.backup.timezone || 'Asia/Jakarta';
     
-    const interval = parser.parseExpression(schedule, {
+    const interval = parseExpression(schedule, {
       tz: timezone
     });
     return interval.next().toDate();
