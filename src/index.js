@@ -61,52 +61,47 @@ const chunkButtons = (items, size = 2) => {
 };
 
 const sendMainMenu = async (chatId) => {
-  const inline_keyboard = [
+  const keyboard = [
     [
       {
         text: '📊 Status Backup',
-        callback_data: makeCallbackData('status'),
       },
     ],
     [
       {
         text: '💾 Backup Semua Router',
-        callback_data: makeCallbackData('backup_all'),
       },
     ],
     [
       {
         text: '📍 Backup Router Tertentu',
-        callback_data: makeCallbackData('backup_router_select'),
       },
     ],
     [
       {
         text: '📋 Daftar Router',
-        callback_data: makeCallbackData('list_routers'),
       },
     ],
     [
       {
         text: '➕ Tambah Router',
-        callback_data: makeCallbackData('add_router_flow'),
       },
       {
         text: '➖ Hapus Router',
-        callback_data: makeCallbackData('remove_router_select'),
       },
     ],
     [
       {
         text: '🧪 Test Koneksi Router',
-        callback_data: makeCallbackData('test_router_select'),
       },
     ],
   ];
 
   await bot.sendMessage(chatId, 'Pilih menu:', {
     reply_markup: {
-      inline_keyboard,
+      keyboard,
+      resize_keyboard: true,
+      one_time_keyboard: false,
     },
   });
 };
@@ -678,11 +673,42 @@ bot.on('callback_query', async (query) => {
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   if (!ensureChatAllowed(chatId)) return;
-  if (!sessions.has(chatId)) return;
-
-  if (!msg.text || msg.text.startsWith('/')) return;
-
-  await handleSessionInput(chatId, msg.text);
+  
+  // Handle keyboard button presses
+  if (msg.text && !msg.text.startsWith('/')) {
+    const text = msg.text.trim();
+    
+    // Check if it's a keyboard button
+    switch (text) {
+      case '📊 Status Backup':
+        await sendStatusMessage(chatId);
+        return;
+      case '💾 Backup Semua Router':
+        await sendBackup(chatId, false);
+        return;
+      case '📍 Backup Router Tertentu':
+        await sendRouterSelection(chatId, 'backup_router', 'Belum ada router untuk backup.');
+        return;
+      case '📋 Daftar Router':
+        await sendRouterListMessage(chatId);
+        return;
+      case '➕ Tambah Router':
+        await startAddRouterFlow(chatId);
+        return;
+      case '➖ Hapus Router':
+        await sendRouterSelection(chatId, 'remove_router', 'Belum ada router untuk dihapus.');
+        return;
+      case '🧪 Test Koneksi Router':
+        await sendRouterSelection(chatId, 'test_router', 'Belum ada router untuk diuji.');
+        return;
+    }
+    
+    // Handle session input if session exists
+    if (sessions.has(chatId)) {
+      await handleSessionInput(chatId, msg.text);
+      return;
+    }
+  }
 });
 
 bot.on('polling_error', (err) => {
