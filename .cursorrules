@@ -1,0 +1,209 @@
+# Rules untuk Agent - Telegram MikroTik Backup Bot
+
+## 📋 Deskripsi Proyek
+Proyek ini adalah Telegram bot untuk backup otomatis perangkat MikroTik melalui SSH. Bot dapat menjalankan backup terjadwal dan manual, mengelola daftar router, dan mengirim file backup ke Telegram.
+
+## 🏗️ Struktur Proyek
+```
+telegram-bot/
+├── src/
+│   ├── index.js              # Main bot logic, handlers, cron scheduler
+│   ├── config.js             # Environment configuration loader
+│   └── services/
+│       ├── mikrotikService.js # SSH operations
+│       └── routerStore.js    # Router CRUD operations
+├── data/                      # Runtime data (gitignored)
+│   ├── routers.json          # Router configurations
+│   └── customSchedule.json   # Custom backup schedule
+├── backups/                   # Backup files (gitignored)
+├── .env                       # Environment variables (gitignored)
+└── package.json
+```
+
+## 🔧 Teknologi & Dependencies
+- **Runtime**: Node.js 18+ (CommonJS)
+- **Framework**: node-telegram-bot-api (polling mode)
+- **SSH**: ssh2 library
+- **Scheduler**: node-cron
+- **File ops**: fs-extra
+- **Date**: date-fns
+- **Config**: dotenv
+
+## 📝 Coding Standards
+
+### 1. **Module System**
+- ✅ GUNAKAN CommonJS (`require`/`module.exports`)
+- ❌ JANGAN gunakan ES6 modules (`import`/`export`)
+
+### 2. **Error Handling**
+- ✅ SELALU sanitize error messages yang mungkin mengandung password/kredensial
+- ✅ Gunakan fungsi `sanitizeError()` untuk menghapus informasi sensitif
+- ✅ Handle network errors (EFATAL, ETIMEDOUT, ECONNRESET) dengan graceful degradation
+- ✅ Jangan spam log untuk network errors yang berulang
+
+### 3. **File Operations**
+- ✅ Gunakan `fs-extra` untuk operasi file (bukan `fs` native)
+- ✅ SELALU gunakan `fs.ensureDir()` sebelum menulis file
+- ✅ Untuk `routers.json`, gunakan atomic write (temp file → rename)
+- ✅ Gunakan queue-based locking untuk mencegah race conditions
+
+### 4. **SSH Operations**
+- ✅ SELALU tutup koneksi SSH dengan `conn.end()` di `finally` block
+- ✅ SELALU tutup file streams dengan `stream.destroy()` setelah digunakan
+- ✅ Cleanup file remote di MikroTik setelah download (gunakan try-catch agar tidak mempengaruhi backup success)
+- ✅ Timeout koneksi: 10 detik (readyTimeout: 10000)
+
+### 5. **Telegram Bot**
+- ✅ SELALU check `ensureChatAllowed(chatId)` sebelum memproses pesan
+- ✅ Gunakan session management untuk wizard flows (add router, set schedule)
+- ✅ Auto-cleanup session setelah 30 menit timeout
+- ✅ Handle keyboard button presses dan callback queries
+- ✅ Jangan kirim error message jika network down (akan fail lagi)
+
+### 6. **Session Management**
+- ✅ Gunakan `sessions` Map untuk tracking wizard flows
+- ✅ Gunakan `sessionTimeouts` Map untuk auto-cleanup
+- ✅ Clear session setelah selesai atau cancel
+- ✅ Set timeout 30 menit untuk setiap session
+
+### 7. **Cron Scheduling**
+- ✅ Load custom schedule dari `data/customSchedule.json` saat startup
+- ✅ Validate timezone sebelum membuat cron job
+- ✅ Fallback ke UTC jika timezone invalid
+- ✅ Stop existing job sebelum membuat job baru
+
+### 8. **Data Validation**
+- ✅ Validate semua input dari user (nama, host, username, password, port)
+- ✅ Validate router data sebelum save (name, host, username, password required)
+- ✅ Check duplicate router name sebelum add
+- ✅ Validate time format (HH:MM) untuk schedule setting
+
+### 9. **File Paths**
+- ✅ SELALU gunakan `path.join()` untuk path construction
+- ✅ Gunakan `__dirname` untuk relative paths dari file saat ini
+- ✅ Backup directory: `config.backup.directory`
+- ✅ Router data: `data/routers.json`
+- ✅ Custom schedule: `data/customSchedule.json`
+
+### 10. **Naming Conventions**
+- ✅ Function names: camelCase (`sendBackup`, `performBackup`)
+- ✅ Variable names: camelCase (`chatId`, `routerName`)
+- ✅ File names: camelCase dengan extension (`.backup`, `.rsc`)
+- ✅ Router names: sanitize dengan `safeName()` untuk file names
+
+### 11. **Error Messages**
+- ✅ Pesan error dalam Bahasa Indonesia
+- ✅ SELALU sanitize error sebelum kirim ke user
+- ✅ Jangan expose password/kredensial dalam error messages
+- ✅ Gunakan emoji untuk status (✅, ❌, ℹ️, 📊, dll)
+
+### 12. **Code Organization**
+- ✅ Pisahkan logic ke service files (`mikrotikService.js`, `routerStore.js`)
+- ✅ Main bot logic di `index.js`
+- ✅ Config loading di `config.js`
+- ✅ Helper functions di top level atau di akhir file
+
+## 🚫 Yang TIDAK BOLEH Dilakukan
+
+1. ❌ JANGAN commit file sensitif:
+   - `.env`
+   - `data/routers.json`
+   - `backups/` directory
+   - `*.log` files
+
+2. ❌ JANGAN hardcode kredensial atau token di code
+3. ❌ JANGAN expose password dalam error messages atau logs
+4. ❌ JANGAN gunakan ES6 modules
+5. ❌ JANGAN lupa close SSH connections atau file streams
+6. ❌ JANGAN skip error handling untuk network operations
+7. ❌ JANGAN buat race conditions pada file operations (gunakan queue)
+
+## ✅ Best Practices
+
+1. **Atomic Operations**: Gunakan temp file + rename untuk write operations
+2. **Queue-based Locking**: Untuk mencegah race conditions pada concurrent writes
+3. **Graceful Degradation**: Handle network errors tanpa crash bot
+4. **Resource Cleanup**: SELALU cleanup resources (connections, streams) di `finally` blocks
+5. **Input Validation**: Validate semua user input sebelum processing
+6. **Error Sanitization**: SELALU sanitize errors sebelum kirim ke user
+7. **Session Timeout**: Auto-cleanup sessions setelah 30 menit
+8. **Timezone Validation**: Validate timezone sebelum membuat cron job
+
+## 🔄 Git Workflow
+
+1. ✅ SETIAP perubahan HARUS langsung di-commit dengan message yang jelas
+2. ✅ SETIAP commit HARUS langsung di-push ke remote
+3. ✅ Commit message format: `feat: description` atau `fix: description`
+4. ✅ Jangan commit file yang ada di `.gitignore`
+
+## 📦 Dependencies Management
+
+- ✅ Jangan update dependencies tanpa alasan yang jelas
+- ✅ Test setelah update dependencies
+- ✅ Lock versions di `package-lock.json` (jangan commit jika tidak perlu)
+
+## 🧪 Testing Considerations
+
+- ✅ Test SSH connection sebelum backup
+- ✅ Test file operations (read/write)
+- ✅ Test session management (timeout, cleanup)
+- ✅ Test error handling (network errors, invalid input)
+
+## 🌐 Bahasa & Lokalisasi
+
+- ✅ Semua pesan bot dalam Bahasa Indonesia
+- ✅ Format tanggal: `Intl.DateTimeFormat('id-ID')`
+- ✅ Timezone default: `Asia/Jakarta`
+
+## 🔐 Security
+
+- ✅ Jangan log password atau kredensial
+- ✅ Sanitize semua error messages
+- ✅ Validate chat ID whitelist
+- ✅ Jangan expose internal paths atau struktur
+
+## 📝 Contoh Code Patterns
+
+### Error Handling dengan Sanitization
+```javascript
+try {
+  await performBackup(router);
+} catch (err) {
+  const sanitizedError = sanitizeError(err);
+  await bot.sendMessage(chatId, `Error: ${sanitizedError}`);
+}
+```
+
+### SSH Connection dengan Cleanup
+```javascript
+const conn = await connectSsh(router);
+try {
+  // operations
+} finally {
+  conn.end();
+}
+```
+
+### Atomic File Write
+```javascript
+const tempPath = `${routersPath}.tmp`;
+await fs.writeJSON(tempPath, data, { spaces: 2 });
+await fs.rename(tempPath, routersPath);
+```
+
+### Session Management
+```javascript
+sessions.set(chatId, { action: 'add_router', step: 'name', data: {} });
+setSessionTimeout(chatId);
+// ... later
+clearSession(chatId);
+```
+
+## 🎯 Prioritas Saat Bekerja
+
+1. **Security**: Jangan expose kredensial
+2. **Reliability**: Handle errors dengan baik
+3. **Resource Management**: Cleanup connections/streams
+4. **User Experience**: Pesan error yang jelas dan helpful
+5. **Code Quality**: Follow patterns yang sudah ada
+
