@@ -354,10 +354,11 @@ async function sendAutoBackupSettings(chatId) {
   const isEnabled = scheduledJob !== null;
   const nextRun = getNextRunTime();
   const currentSchedule = customSchedule || config.backup.cronSchedule;
+  const readableTime = cronToTime(currentSchedule) || currentSchedule;
   
   const statusText = isEnabled 
-    ? `✅ Aktif\nJadwal: ${currentSchedule}\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun) : 'Tidak diketahui'}`
-    : `❌ Nonaktif\nJadwal: ${currentSchedule}\nTimezone: ${config.backup.timezone}\nBelum ada jadwal backup otomatis yang diaktifkan.`;
+    ? `✅ Aktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun) : 'Tidak diketahui'}`
+    : `❌ Nonaktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBelum ada jadwal backup otomatis yang diaktifkan.`;
 
   const keyboard = [
     [
@@ -394,18 +395,53 @@ async function startScheduleSettingFlow(chatId) {
   clearSession(chatId);
   sessions.set(chatId, {
     action: 'set_schedule',
-    step: 'cron',
+    step: 'time',
     data: {},
   });
   try {
     await bot.sendMessage(
       chatId,
-      'Atur jadwal backup otomatis.\n\nFormat cron: * * * * *\n(menit jam hari bulan hari-minggu)\n\nContoh:\n- `0 18 * * *` = Setiap hari jam 18:00\n- `0 0 * * 0` = Setiap Minggu jam 00:00\n- `0 0 1 * *` = Setiap tanggal 1 setiap bulan\n\nMasukkan format cron:'
+      'Atur jadwal backup otomatis.\n\nMasukkan waktu backup dalam format:\n**HH:MM** (24 jam)\n\nContoh:\n- `18:00` = Setiap hari jam 18:00\n- `00:00` = Setiap hari jam 00:00 (tengah malam)\n- `09:30` = Setiap hari jam 09:30\n\nMasukkan waktu (HH:MM):'
     );
   } catch (err) {
     console.error('Failed to send message in startScheduleSettingFlow:', err);
     clearSession(chatId);
   }
+}
+
+// Convert time format (HH:MM) to cron expression
+function timeToCron(timeStr) {
+  const timeMatch = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!timeMatch) return null;
+  
+  const hour = parseInt(timeMatch[1], 10);
+  const minute = parseInt(timeMatch[2], 10);
+  
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null;
+  }
+  
+  // Convert to cron: minute hour * * * (every day)
+  return `${minute} ${hour} * * *`;
+}
+
+// Convert cron expression to readable time format (HH:MM)
+function cronToTime(cronExpr) {
+  if (!cronExpr) return null;
+  
+  const parts = cronExpr.trim().split(/\s+/);
+  if (parts.length !== 5) return null;
+  
+  const [minute, hour, day, month, dayOfWeek] = parts;
+  
+  // Only convert if it's a daily schedule (* * * *)
+  if (day === '*' && month === '*' && dayOfWeek === '*') {
+    const h = hour === '*' ? '00' : hour.padStart(2, '0');
+    const m = minute === '*' ? '00' : minute.padStart(2, '0');
+    return `${h}:${m}`;
+  }
+  
+  return null;
 }
 
 async function sendRouterSelection(chatId, action, emptyMessage) {
@@ -597,21 +633,21 @@ async function handleSessionInput(chatId, text) {
   }
   
   if (session.action === 'set_schedule') {
-    if (session.step === 'cron') {
+    if (session.step === 'time') {
       if (!value) {
         try {
-          await bot.sendMessage(chatId, 'Format cron tidak boleh kosong. Silakan masukkan format cron:');
+          await bot.sendMessage(chatId, 'Waktu tidak boleh kosong. Silakan masukkan waktu dalam format HH:MM:\nContoh: 18:00');
         } catch (err) {
           console.error('Failed to send message:', err);
         }
         return;
       }
       
-      // Validate cron format (basic validation)
-      const cronParts = value.trim().split(/\s+/);
-      if (cronParts.length !== 5) {
+      // Convert time to cron expression
+      const cronExpression = timeToCron(value);
+      if (!cronExpression) {
         try {
-          await bot.sendMessage(chatId, 'Format cron tidak valid. Format harus: * * * * *\n(menit jam hari bulan hari-minggu)\n\nContoh: 0 18 * * *\nSilakan masukkan lagi:');
+          await bot.sendMessage(chatId, '❌ Format waktu tidak valid.\n\nGunakan format: **HH:MM** (24 jam)\n\nContoh:\n- `18:00` = Setiap hari jam 18:00\n- `09:30` = Setiap hari jam 09:30\n\nSilakan masukkan lagi:');
         } catch (err) {
           console.error('Failed to send message:', err);
         }
@@ -620,29 +656,29 @@ async function handleSessionInput(chatId, text) {
       
       try {
         // Test if cron expression is valid by trying to create a schedule
-        const testSchedule = cron.schedule(value, () => {}, { timezone: config.backup.timezone });
+        const testSchedule = cron.schedule(cronExpression, () => {}, { timezone: config.backup.timezone });
         testSchedule.stop();
         
         // If valid, update schedule
-        customSchedule = value;
+        customSchedule = cronExpression;
         if (scheduledJob) {
           // Restart with new schedule
-          scheduleJob(value);
+          scheduleJob(cronExpression);
           try {
-            await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: ${value}\nAuto backup akan menggunakan jadwal baru ini.`);
+            await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: **${value}** (setiap hari)\nAuto backup akan menggunakan jadwal baru ini.`);
           } catch (err) {
             console.error('Failed to send message:', err);
           }
         } else {
           try {
-            await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: ${value}\nAktifkan auto backup untuk menggunakan jadwal ini.`);
+            await bot.sendMessage(chatId, `✅ Jadwal backup berhasil diatur: **${value}** (setiap hari)\nAktifkan auto backup untuk menggunakan jadwal ini.`);
           } catch (err) {
             console.error('Failed to send message:', err);
           }
         }
       } catch (err) {
         try {
-          await bot.sendMessage(chatId, `❌ Format cron tidak valid: ${err.message}\nSilakan masukkan format cron yang benar:\nContoh: 0 18 * * *`);
+          await bot.sendMessage(chatId, `❌ Gagal mengatur jadwal: ${err.message}\nSilakan coba lagi dengan format HH:MM`);
         } catch (sendErr) {
           console.error('Failed to send message:', sendErr);
         }
