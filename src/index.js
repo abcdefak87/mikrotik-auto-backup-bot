@@ -428,13 +428,14 @@ function getNextRunTime() {
   const schedule = customSchedule || config.backup.cronSchedule;
   
   try {
-    const { parseExpression } = require('cron-parser');
+    const { CronExpressionParser } = require('cron-parser');
     const timezone = config.backup.timezone || 'Asia/Jakarta';
     
-    const interval = parseExpression(schedule, {
+    const expr = CronExpressionParser.parse(schedule, {
       tz: timezone
     });
-    return interval.next().toDate();
+    const next = expr.next();
+    return next.toDate();
   } catch (err) {
     console.error('Error calculating next run time:', err);
     // Fallback to simple calculation for daily schedules
