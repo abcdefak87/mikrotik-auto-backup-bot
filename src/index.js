@@ -1019,19 +1019,46 @@ bot.on('message', async (msg) => {
   }
 });
 
+// Track polling errors to avoid spam logging
+let lastPollingError = null;
+let pollingErrorCount = 0;
+let pollingErrorLastLog = 0;
+
 bot.on('polling_error', (err) => {
-  console.error('Polling error:', err);
+  const now = Date.now();
+  const errorKey = err.code || 'UNKNOWN';
   
-  // Handle different types of errors
-  if (err.code === 'EFATAL' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
-    console.error('Network error detected. Bot will continue polling...');
-    // Bot will automatically retry polling
-  } else if (err.response && err.response.statusCode === 429) {
-    // Rate limit error
-    const retryAfter = err.response.headers['retry-after'] || 60;
-    console.error(`Rate limit exceeded. Will retry after ${retryAfter} seconds.`);
-  } else {
-    console.error('Unknown polling error:', err.message || err);
+  // Reset counter if error type changed or 5 minutes passed
+  if (lastPollingError !== errorKey || (now - pollingErrorLastLog) > 5 * 60 * 1000) {
+    pollingErrorCount = 0;
+    lastPollingError = errorKey;
+  }
+  
+  pollingErrorCount++;
+  
+  // Only log every 10th error or if it's a new error type
+  if (pollingErrorCount === 0 || pollingErrorCount % 10 === 0) {
+    // Handle different types of errors
+    if (err.code === 'EFATAL' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+      if (pollingErrorCount === 1) {
+        console.error('Network error detected. Bot will continue polling...');
+      } else {
+        console.warn(`Network error (${pollingErrorCount}x). Bot continues polling...`);
+      }
+      // Bot will automatically retry polling
+    } else if (err.response && err.response.statusCode === 429) {
+      // Rate limit error
+      const retryAfter = err.response.headers['retry-after'] || 60;
+      console.error(`Rate limit exceeded. Will retry after ${retryAfter} seconds.`);
+      pollingErrorCount = 0; // Reset counter for rate limit
+    } else {
+      if (pollingErrorCount === 1) {
+        console.error('Polling error:', err.message || err);
+      } else {
+        console.warn(`Polling error (${pollingErrorCount}x):`, err.message || 'Unknown error');
+      }
+    }
+    pollingErrorLastLog = now;
   }
 });
 
