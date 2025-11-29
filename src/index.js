@@ -362,8 +362,10 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       triggeredBySchedule,
       routers: summary,
     });
+    console.log(`Backup history saved: ${summary.length} routers, timestamp: ${timestamp.toISOString()}`);
   } catch (err) {
     console.error('Failed to save backup history:', err.message);
+    console.error('Error details:', err);
   }
 
   // Update failure counts and check for alerts
