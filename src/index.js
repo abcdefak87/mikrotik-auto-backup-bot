@@ -28,7 +28,15 @@ if (config.telegram.defaultChatId) {
 const ensureChatAllowed = (chatId) =>
   allowedChats.size === 0 || allowedChats.has(String(chatId));
 
-const bot = new TelegramBot(config.telegram.token, { polling: true });
+const bot = new TelegramBot(config.telegram.token, { 
+  polling: {
+    interval: 1000,
+    autoStart: true,
+    params: {
+      timeout: 10,
+    },
+  },
+});
 let lastBackupMeta = null;
 let scheduledJob = null;
 const sessions = new Map();
@@ -946,6 +954,23 @@ bot.on('message', async (msg) => {
 
 bot.on('polling_error', (err) => {
   console.error('Polling error:', err);
+  
+  // Handle different types of errors
+  if (err.code === 'EFATAL' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+    console.error('Network error detected. Bot will continue polling...');
+    // Bot will automatically retry polling
+  } else if (err.response && err.response.statusCode === 429) {
+    // Rate limit error
+    const retryAfter = err.response.headers['retry-after'] || 60;
+    console.error(`Rate limit exceeded. Will retry after ${retryAfter} seconds.`);
+  } else {
+    console.error('Unknown polling error:', err.message || err);
+  }
+});
+
+// Handle webhook errors if using webhook mode
+bot.on('error', (err) => {
+  console.error('Bot error:', err);
 });
 
 fs.ensureDirSync(config.backup.directory);
