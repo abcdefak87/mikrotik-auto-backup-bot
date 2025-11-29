@@ -27,14 +27,25 @@ function startDownloadServer() {
   // Parse JSON (if needed)
   app.use(express.json());
   
+  // Helper function to escape HTML
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+  
   // Helper function to render file list page
-  async function renderFileListPage(token, pass, tokenData, files) {
+  function renderFileListPage(token, pass, tokenData, files) {
     if (files.length === 0) {
       return `
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Download Backup - ${tokenData.routerName}</title>
+          <title>Download Backup - ${escapeHtml(tokenData.routerName)}</title>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
@@ -62,7 +73,7 @@ function startDownloadServer() {
         </head>
         <body>
           <div class="container">
-            <h1>📁 File Backup: ${tokenData.routerName}</h1>
+            <h1>📁 File Backup: ${escapeHtml(tokenData.routerName)}</h1>
             <p class="empty">Belum ada file backup untuk router ini.</p>
           </div>
         </body>
@@ -216,7 +227,7 @@ function startDownloadServer() {
       </head>
       <body>
         <div class="container">
-          <h1>📁 File Backup: ${tokenData.routerName}</h1>
+          <h1>📁 File Backup: ${escapeHtml(tokenData.routerName)}</h1>
           <p class="subtitle">Total: ${files.length} file</p>
           ${fileListHtml}
         </div>
@@ -229,25 +240,36 @@ function startDownloadServer() {
   // Or file list page (GET /download?token=xxx&pass=xxx with password)
   app.get('/download', async (req, res) => {
     try {
+      console.log('[GET /download] Request received');
       const { token, pass } = req.query;
+      console.log('[GET /download] token:', token ? 'present' : 'missing', 'pass:', pass ? 'present' : 'missing');
       
       // If password provided in query, show file list
       if (token && pass) {
+        console.log('[GET /download] Verifying token with password');
         const tokenData = await verifyToken(token, pass);
         
         if (!tokenData) {
+          console.log('[GET /download] Invalid token or password');
           return res.redirect(`/download?token=${token}&error=${encodeURIComponent('Password salah atau token tidak valid')}`);
         }
         
+        console.log('[GET /download] Token valid, router:', tokenData.routerName);
+        
         // Get all backup files for this router
+        console.log('[GET /download] Getting backup files for router:', tokenData.routerName);
         const files = await getBackupFilesByRouter(tokenData.routerName, 100);
+        console.log('[GET /download] Found files:', files.length);
+        
         const html = renderFileListPage(token, pass, tokenData, files);
+        console.log('[GET /download] HTML generated, length:', html.length);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(html);
       }
       
       // If no token, show error
       if (!token) {
+        console.log('[GET /download] No token provided');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(`
           <!DOCTYPE html>
@@ -293,13 +315,14 @@ function startDownloadServer() {
       }
       
       // Show password form
+      console.log('[GET /download] Showing password form for router:', tokenData.routerName);
       const errorMsg = req.query.error ? decodeURIComponent(req.query.error) : '';
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(`
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Download Backup - ${tokenData.routerName}</title>
+          <title>Download Backup - ${escapeHtml(tokenData.routerName)}</title>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
@@ -385,8 +408,8 @@ function startDownloadServer() {
         <body>
           <div class="container">
             <h1>🔐 Masukkan Password</h1>
-            <p class="subtitle">Router: <strong>${tokenData.routerName}</strong></p>
-            <div class="error">${errorMsg}</div>
+            <p class="subtitle">Router: <strong>${escapeHtml(tokenData.routerName)}</strong></p>
+            <div class="error">${escapeHtml(errorMsg)}</div>
             <form method="POST" action="/download">
               <input type="hidden" name="token" value="${token}">
               <label for="password">Password:</label>
