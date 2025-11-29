@@ -110,19 +110,39 @@ async function removeRouter(name) {
     writeQueue = writeQueue.then(async () => {
       try {
         const routers = await getRouters();
+        console.warn(`[removeRouter] Current routers count: ${routers.length}`);
+        console.warn(`[removeRouter] Looking for router: "${trimmedName}"`);
+        
         // Use case-insensitive matching with trim (same as addRouter duplicate check)
         const filtered = routers.filter((r) => {
           if (!r.name) return true; // Keep routers without name (shouldn't happen, but safe)
-          return r.name.trim().toLowerCase() !== trimmedName.toLowerCase();
+          const routerName = r.name.trim().toLowerCase();
+          const targetName = trimmedName.toLowerCase();
+          const matches = routerName === targetName;
+          if (matches) {
+            console.warn(`[removeRouter] Found matching router: "${r.name}" (original: "${r.name}")`);
+          }
+          return !matches; // Keep routers that don't match
         });
+        
+        console.warn(`[removeRouter] Filtered routers count: ${filtered.length}`);
+        
         if (filtered.length === routers.length) {
+          console.warn(`[removeRouter] Router not found. Available routers:`, routers.map(r => `"${r.name}"`).join(', '));
           throw new Error('Router tidak ditemukan');
         }
+        
         await saveRouters(filtered);
+        console.warn(`[removeRouter] Router "${trimmedName}" successfully removed`);
         resolve();
       } catch (err) {
+        console.error(`[removeRouter] Error:`, err.message || err);
         reject(err);
       }
+    }).catch((err) => {
+      // Catch any errors from the queue chain
+      console.error(`[removeRouter] Queue error:`, err.message || err);
+      reject(err);
     });
   });
 }

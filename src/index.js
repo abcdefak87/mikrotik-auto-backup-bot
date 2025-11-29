@@ -1531,9 +1531,10 @@ bot.on('callback_query', async (query) => {
         if (payload) {
           try {
             // Log for debugging
-            console.warn(`Attempting to remove router: "${payload}"`);
-            await removeRouter(payload);
-            console.warn(`Router "${payload}" successfully removed`);
+            console.warn(`[index.js] Attempting to remove router: "${payload}"`);
+            const result = await removeRouter(payload);
+            console.warn(`[index.js] removeRouter returned:`, result);
+            console.warn(`[index.js] Router "${payload}" successfully removed`);
             await bot.sendMessage(chatId, `✅ Router "${formatHtml(payload)}" dihapus.`, { parse_mode: 'HTML' });
             // Answer callback query after successful removal
             try {
@@ -1545,13 +1546,19 @@ bot.on('callback_query', async (query) => {
             }
           } catch (err) {
             // Log error for debugging
-            console.error('Error removing router:', err.message || err);
+            console.error('[index.js] Error removing router:', err);
+            console.error('[index.js] Error message:', err.message);
+            console.error('[index.js] Error stack:', err.stack);
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
-            await bot.sendMessage(
-              chatId,
-              `❌ Gagal menghapus router: ${formatHtml(sanitizedMsg)}`,
-              { parse_mode: 'HTML' }
-            );
+            try {
+              await bot.sendMessage(
+                chatId,
+                `❌ Gagal menghapus router: ${formatHtml(sanitizedMsg)}`,
+                { parse_mode: 'HTML' }
+              );
+            } catch (sendErr) {
+              console.error('[index.js] Failed to send error message:', sendErr.message);
+            }
             // Answer callback query even on error
             try {
               await bot.answerCallbackQuery(query.id, { text: 'Gagal menghapus router' });
