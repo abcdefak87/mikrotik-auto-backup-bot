@@ -1568,9 +1568,42 @@ bot.on('callback_query', async (query) => {
         } else {
           await bot.sendMessage(chatId, 'Perintah tidak dikenal.');
         }
+      }
+      
+      // Answer callback query for quick operations
+      if (!isLongOperation) {
+        try {
+          await bot.answerCallbackQuery(query.id);
+        } catch (err) {
+          // Ignore expired query errors
+          if (err.code !== 'ETELEGRAM' || !err.message.includes('query is too old')) {
+            console.warn('Error answering callback query:', err.message);
+          }
+        }
+      }
+    } catch (err) {
+      // Handle errors gracefully
+      const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
+      try {
+        await bot.sendMessage(chatId, `❌ Error: ${sanitizedMsg}`);
+      } catch (sendErr) {
+        if (!isNetworkError(sendErr)) {
+          console.error('Error sending error message:', sendErr.message);
+        }
+      }
+      
+      // Try to answer callback query even on error
+      if (!isLongOperation) {
+        try {
+          await bot.answerCallbackQuery(query.id, { text: 'Terjadi error' });
+        } catch (answerErr) {
+          // Ignore expired query errors
+          if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
+            console.warn('Error answering callback query on error:', answerErr.message);
+          }
+        }
+      }
     }
-  } finally {
-    await bot.answerCallbackQuery(query.id);
   }
 });
 
