@@ -526,39 +526,45 @@ async function sendStatusMessage(chatId) {
     .join('\n');
 
   const response = [
-    `Total router: ${routers.length}`,
-    routerLines,
-    `Folder lokal: ${config.backup.directory}`,
-    `Jadwal cron: ${config.backup.cronSchedule} (${config.backup.timezone})`,
-    `Backup terakhir: ${
+    `📊 **Status Backup**`,
+    '',
+    `📦 **Total Router:** ${routers.length}`,
+    routerLines ? `\n${routerLines}` : '',
+    '',
+    `📁 **Folder Lokal:**\n\`${config.backup.directory}\``,
+    '',
+    `⏰ **Jadwal Backup:**\n${cronToTime(config.backup.cronSchedule) || config.backup.cronSchedule} (${config.backup.timezone})`,
+    '',
+    `🕐 **Backup Terakhir:**\n${
       lastBackupMeta?.successAt
         ? formatDate(lastBackupMeta.successAt, config.backup.timezone)
-        : 'Belum pernah'
+        : '❌ Belum pernah'
     }`,
-    lastSummary ? `Ringkasan:\n${lastSummary}` : null,
-    `Backup berikut: ${
-      nextRun ? formatDate(nextRun, config.backup.timezone) : 'Tidak terjadwal / menunggu konfigurasi'
+    lastSummary ? `\n📋 **Ringkasan Terakhir:**\n${lastSummary}` : '',
+    '',
+    `⏭️ **Backup Berikutnya:**\n${
+      nextRun ? formatDate(nextRun, config.backup.timezone) : '❌ Tidak terjadwal / menunggu konfigurasi'
     }`,
   ]
     .filter(Boolean)
     .join('\n');
 
-  await bot.sendMessage(chatId, response);
+  await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
 }
 
 async function sendRouterListMessage(chatId) {
   const routers = await getRouters();
   if (!routers.length) {
-    await bot.sendMessage(chatId, 'Belum ada router terdaftar.');
+    await bot.sendMessage(chatId, '❌ Belum ada router terdaftar.');
     return;
   }
   const lines = routers
     .map(
       (r, idx) =>
-        `${idx + 1}. ${r.name} - ${r.host}:${r.port || 22} (${r.username})`
+        `${idx + 1}. **${r.name}**\n   📍 ${r.host}:${r.port || 22}\n   👤 ${r.username}`
     )
-    .join('\n');
-  await bot.sendMessage(chatId, `Daftar router:\n${lines}`);
+    .join('\n\n');
+  await bot.sendMessage(chatId, `📋 **Daftar Router**\n\n${lines}`, { parse_mode: 'Markdown' });
 }
 
 async function sendHealthCheck(chatId) {
@@ -1390,12 +1396,17 @@ bot.on('callback_query', async (query) => {
           }
           try {
             await testConnection(router);
-            await bot.sendMessage(chatId, `Koneksi ke "${router.name}" OK.`);
+            await bot.sendMessage(
+              chatId,
+              `✅ **Koneksi Berhasil**\n\n📡 Router: **${router.name}**\n📍 Host: ${router.host}:${router.port || 22}\n👤 Username: ${router.username}`,
+              { parse_mode: 'Markdown' }
+            );
           } catch (err) {
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
             await bot.sendMessage(
               chatId,
-              `Koneksi ke "${router.name}" gagal: ${sanitizedMsg}`
+              `❌ **Koneksi Gagal**\n\n📡 Router: **${router.name}**\n📍 Host: ${router.host}:${router.port || 22}\n👤 Username: ${router.username}\n\n⚠️ Error: ${sanitizedMsg}`,
+              { parse_mode: 'Markdown' }
             );
           }
         }
