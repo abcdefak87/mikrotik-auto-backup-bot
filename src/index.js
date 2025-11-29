@@ -509,47 +509,68 @@ function getNextRunTime() {
 }
 
 async function sendStatusMessage(chatId) {
-  const routers = await getRouters();
-  const nextRun = getNextRunTime();
-  const routerLines = routers.length
-    ? routers
-        .map(
-          (r) => `- ${r.name}: ${r.host}:${r.port || 22} (${r.username})`
-        )
-        .join('\n')
-    : '- Belum ada router';
+  try {
+    const routers = await getRouters();
+    const nextRun = getNextRunTime();
+    const routerLines = routers.length
+      ? routers
+          .map(
+            (r) => `- ${r.name}: ${r.host}:${r.port || 22} (${r.username})`
+          )
+          .join('\n')
+      : '- Belum ada router';
 
-  const lastSummary = lastBackupMeta?.routers
-    ?.map(
-      (r) => `  * ${r.name}: ${r.success ? '✅ Berhasil' : `❌ ${r.error}`}`
-    )
-    .join('\n');
+    const lastSummary = lastBackupMeta?.routers
+      ?.map(
+        (r) => {
+          const errorMsg = r.error ? sanitizeError(r.error) : 'Tidak diketahui';
+          return `  * ${r.name}: ${r.success ? '✅ Berhasil' : `❌ ${errorMsg}`}`;
+        }
+      )
+      .join('\n');
 
-  const response = [
-    `📊 **Status Backup**`,
-    '',
-    `📦 **Total Router:** ${routers.length}`,
-    routerLines ? `\n${routerLines}` : '',
-    '',
-    `📁 **Folder Lokal:**\n\`${config.backup.directory}\``,
-    '',
-    `⏰ **Jadwal Backup:**\n${cronToTime(config.backup.cronSchedule) || config.backup.cronSchedule} (${config.backup.timezone})`,
-    '',
-    `🕐 **Backup Terakhir:**\n${
-      lastBackupMeta?.successAt
-        ? formatDate(lastBackupMeta.successAt, config.backup.timezone)
-        : '❌ Belum pernah'
-    }`,
-    lastSummary ? `\n📋 **Ringkasan Terakhir:**\n${lastSummary}` : '',
-    '',
-    `⏭️ **Backup Berikutnya:**\n${
-      nextRun ? formatDate(nextRun, config.backup.timezone) : '❌ Tidak terjadwal / menunggu konfigurasi'
-    }`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+    const scheduleTime = cronToTime(config.backup.cronSchedule) || config.backup.cronSchedule;
+    const lastBackupTime = lastBackupMeta?.successAt
+      ? formatDate(lastBackupMeta.successAt, config.backup.timezone)
+      : '❌ Belum pernah';
+    const nextRunTime = nextRun
+      ? formatDate(nextRun, config.backup.timezone)
+      : '❌ Tidak terjadwal / menunggu konfigurasi';
 
-  await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+    const response = [
+      `📊 **Status Backup**`,
+      '',
+      `📦 **Total Router:** ${routers.length}`,
+      routerLines,
+      '',
+      `📁 **Folder Lokal:**`,
+      `\`${config.backup.directory}\``,
+      '',
+      `⏰ **Jadwal Backup:**`,
+      `${scheduleTime} (${config.backup.timezone})`,
+      '',
+      `🕐 **Backup Terakhir:**`,
+      lastBackupTime,
+      lastSummary ? `\n📋 **Ringkasan Terakhir:**\n${lastSummary}` : '',
+      '',
+      `⏭️ **Backup Berikutnya:**`,
+      nextRunTime,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    await bot.sendMessage(chatId, response, { parse_mode: 'Markdown' });
+  } catch (err) {
+    const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
+    try {
+      await bot.sendMessage(chatId, `❌ Error saat menampilkan status: ${sanitizedMsg}`);
+    } catch (sendErr) {
+      if (!isNetworkError(sendErr)) {
+        console.error('Failed to send error message:', sendErr.message);
+      }
+    }
+    console.error('Error in sendStatusMessage:', err);
+  }
 }
 
 async function sendRouterListMessage(chatId) {
