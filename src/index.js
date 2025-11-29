@@ -303,33 +303,6 @@ async function sendRouterListMessage(chatId) {
   await bot.sendMessage(chatId, `Daftar router:\n${lines}`);
 }
 
-async function sendBackupMenu(chatId) {
-  const keyboard = [
-    [
-      {
-        text: '💾 Backup Semua Router',
-      },
-    ],
-    [
-      {
-        text: '📍 Backup Router Tertentu',
-      },
-    ],
-    [
-      {
-        text: '⬅️ Kembali ke Menu',
-      },
-    ],
-  ];
-
-  await bot.sendMessage(chatId, 'Pilih opsi backup:', {
-    reply_markup: {
-      keyboard,
-      resize_keyboard: true,
-      one_time_keyboard: false,
-    },
-  });
-}
 
 async function sendAutoBackupSettings(chatId) {
   const routers = await getRouters();
@@ -743,16 +716,10 @@ bot.on('message', async (msg) => {
         await sendStatusMessage(chatId);
         return;
       case '💾 Backup':
-        await sendBackupMenu(chatId);
+        await sendBackup(chatId, false);
         return;
       case '⚙️ Setting Auto Backup':
         await sendAutoBackupSettings(chatId);
-        return;
-      case '💾 Backup Semua Router':
-        await sendBackup(chatId, false);
-        return;
-      case '📍 Backup Router Tertentu':
-        await sendRouterSelection(chatId, 'backup_router', 'Belum ada router untuk backup.');
         return;
       case '⬅️ Kembali ke Menu':
         await sendMainMenu(chatId);
