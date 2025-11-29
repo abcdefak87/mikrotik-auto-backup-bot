@@ -30,10 +30,20 @@ const execCommand = (conn, command) =>
       if (err) return reject(err);
       let stdout = '';
       let stderr = '';
+      
+      // Handle stderr if available
+      if (stream.stderr) {
+        stream.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+      }
+      
       stream
         .on('close', (code) => {
-          if (code !== 0 && stderr) {
-            reject(new Error(stderr.trim()));
+          // Reject if exit code is non-zero, even if stderr is empty
+          if (code !== 0) {
+            const errorMsg = stderr.trim() || stdout.trim() || `Command failed with exit code ${code}`;
+            reject(new Error(errorMsg));
           } else {
             resolve(stdout.trim());
           }
@@ -41,8 +51,8 @@ const execCommand = (conn, command) =>
         .on('data', (data) => {
           stdout += data.toString();
         })
-        .stderr.on('data', (data) => {
-          stderr += data.toString();
+        .on('error', (err) => {
+          reject(err);
         });
     });
   });
@@ -67,6 +77,10 @@ async function performBackup(router) {
   if (!router) {
     throw new Error('Router tidak valid');
   }
+  
+  if (!router.host || !router.username || !router.password) {
+    throw new Error('Router harus memiliki host, username, dan password');
+  }
 
   const routerName = safeName(router.name || router.host);
   const timestamp = format(new Date(), 'yyyyMMdd_HHmmss');
@@ -90,9 +104,19 @@ async function performBackup(router) {
     const sftp = await getSftp(conn);
     await downloadFile(sftp, remoteBackup, localBackup);
     await downloadFile(sftp, remoteExport, localExport);
+    
     // Prevent MikroTik storage from filling up with leftover artifacts.
-    await execCommand(conn, `/file remove "${remoteBackupFile}"`);
-    await execCommand(conn, `/file remove "${remoteExportFile}"`);
+    // Use try-catch to prevent cleanup failures from affecting backup success
+    try {
+      await execCommand(conn, `/file remove "${remoteBackupFile}"`);
+    } catch (err) {
+      console.warn(`Failed to remove remote backup file ${remoteBackupFile}:`, err.message);
+    }
+    try {
+      await execCommand(conn, `/file remove "${remoteExportFile}"`);
+    } catch (err) {
+      console.warn(`Failed to remove remote export file ${remoteExportFile}:`, err.message);
+    }
 
     return {
       label: timestamp,
@@ -106,6 +130,10 @@ async function performBackup(router) {
 }
 
 async function testConnection(router) {
+  if (!router || !router.host || !router.username || !router.password) {
+    throw new Error('Router harus memiliki host, username, dan password');
+  }
+  
   const conn = await connectSsh(router);
   try {
     await execCommand(conn, '/system resource print');

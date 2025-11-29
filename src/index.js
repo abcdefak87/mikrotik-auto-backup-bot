@@ -143,23 +143,54 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   const notifyMessage = triggeredBySchedule
     ? `Menjalankan backup terjadwal (${targetRouters.length} router)...`
     : `Menjalankan backup (${targetRouters.length} router)...`;
-  await bot.sendMessage(chatId, notifyMessage);
+  try {
+    await bot.sendMessage(chatId, notifyMessage);
+  } catch (err) {
+    console.error('Failed to send backup notification:', err);
+    // Continue with backup even if notification fails
+  }
 
   const summary = [];
   for (const router of targetRouters) {
     try {
       const result = await performBackup(router);
 
-      await bot.sendDocument(chatId, result.backupPath, {
-        caption: `[${router.name}] Backup binary (${path.basename(
-          result.backupPath
-        )})`,
-      });
-      await bot.sendDocument(chatId, result.exportPath, {
-        caption: `[${router.name}] Backup konfigurasi (${path.basename(
-          result.exportPath
-        )})`,
-      });
+      // Send documents with error handling
+      try {
+        await bot.sendDocument(chatId, result.backupPath, {
+          caption: `[${router.name}] Backup binary (${path.basename(
+            result.backupPath
+          )})`,
+        });
+      } catch (docErr) {
+        console.error(`Failed to send backup document for ${router.name}:`, docErr);
+        try {
+          await bot.sendMessage(
+            chatId,
+            `[${router.name}] Backup berhasil, tetapi gagal mengirim file binary: ${docErr.message || 'Tidak diketahui'}`
+          );
+        } catch (msgErr) {
+          console.error('Failed to send error message:', msgErr);
+        }
+      }
+      
+      try {
+        await bot.sendDocument(chatId, result.exportPath, {
+          caption: `[${router.name}] Backup konfigurasi (${path.basename(
+            result.exportPath
+          )})`,
+        });
+      } catch (docErr) {
+        console.error(`Failed to send export document for ${router.name}:`, docErr);
+        try {
+          await bot.sendMessage(
+            chatId,
+            `[${router.name}] Backup berhasil, tetapi gagal mengirim file export: ${docErr.message || 'Tidak diketahui'}`
+          );
+        } catch (msgErr) {
+          console.error('Failed to send error message:', msgErr);
+        }
+      }
 
       summary.push({
         name: router.name,
@@ -303,17 +334,22 @@ async function sendRouterSelection(chatId, action, emptyMessage) {
   });
 }
 
-function startAddRouterFlow(chatId) {
+async function startAddRouterFlow(chatId) {
   clearSession(chatId);
   sessions.set(chatId, {
     action: 'add_router',
     step: 'name',
     data: {},
   });
-  bot.sendMessage(
-    chatId,
-    'Tambah router baru.\nMasukkan nama router (contoh: kantor):'
-  );
+  try {
+    await bot.sendMessage(
+      chatId,
+      'Tambah router baru.\nMasukkan nama router (contoh: kantor):'
+    );
+  } catch (err) {
+    console.error('Failed to send message in startAddRouterFlow:', err);
+    clearSession(chatId);
+  }
 }
 
 function clearSession(chatId) {
@@ -327,53 +363,134 @@ async function handleSessionInput(chatId, text) {
 
   if (session.action === 'add_router') {
     if (session.step === 'name') {
+      if (!value) {
+        try {
+          await bot.sendMessage(chatId, 'Nama router tidak boleh kosong. Silakan masukkan nama router:');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
       session.data.name = value;
       session.step = 'host';
-      bot.sendMessage(chatId, 'Masukkan host/IP router (contoh: 192.168.88.1):');
+      try {
+        await bot.sendMessage(chatId, 'Masukkan host/IP router (contoh: 192.168.88.1):');
+      } catch (err) {
+        console.error('Failed to send message:', err);
+      }
       return;
     }
     if (session.step === 'host') {
+      if (!value) {
+        try {
+          await bot.sendMessage(chatId, 'Host/IP tidak boleh kosong. Silakan masukkan host/IP router:');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
       session.data.host = value;
       session.step = 'username';
-      bot.sendMessage(chatId, 'Masukkan username router:');
+      try {
+        await bot.sendMessage(chatId, 'Masukkan username router:');
+      } catch (err) {
+        console.error('Failed to send message:', err);
+      }
       return;
     }
     if (session.step === 'username') {
+      if (!value) {
+        try {
+          await bot.sendMessage(chatId, 'Username tidak boleh kosong. Silakan masukkan username router:');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
       session.data.username = value;
       session.step = 'password';
-      bot.sendMessage(chatId, 'Masukkan password router:');
+      try {
+        await bot.sendMessage(chatId, 'Masukkan password router:');
+      } catch (err) {
+        console.error('Failed to send message:', err);
+      }
       return;
     }
     if (session.step === 'password') {
+      if (!value) {
+        try {
+          await bot.sendMessage(chatId, 'Password tidak boleh kosong. Silakan masukkan password router:');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
       session.data.password = value;
       session.step = 'port';
-      bot.sendMessage(
-        chatId,
-        'Masukkan port SSH (tekan Enter untuk default 22):'
-      );
+      try {
+        await bot.sendMessage(
+          chatId,
+          'Masukkan port SSH (tekan Enter untuk default 22):'
+        );
+      } catch (err) {
+        console.error('Failed to send message:', err);
+      }
       return;
     }
     if (session.step === 'port') {
       const port = value ? Number(value) : 22;
-      if (Number.isNaN(port) || port <= 0) {
-        bot.sendMessage(chatId, 'Port tidak valid. Masukkan angka yang benar.');
+      if (Number.isNaN(port) || port <= 0 || port > 65535) {
+        try {
+          await bot.sendMessage(chatId, 'Port tidak valid. Masukkan angka antara 1-65535.');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
         return;
       }
       session.data.port = port;
+      
+      // Validate required fields
+      if (!session.data.name || !session.data.host || !session.data.username || !session.data.password) {
+        try {
+          await bot.sendMessage(chatId, 'Data router tidak lengkap. Silakan mulai lagi.');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        clearSession(chatId);
+        try {
+          await sendMainMenu(chatId);
+        } catch (err) {
+          console.error('Failed to send main menu:', err);
+        }
+        return;
+      }
+      
       try {
         await addRouter(session.data);
-        bot.sendMessage(
-          chatId,
-          `Router "${session.data.name}" berhasil ditambahkan.`
-        );
+        try {
+          await bot.sendMessage(
+            chatId,
+            `Router "${session.data.name}" berhasil ditambahkan.`
+          );
+        } catch (err) {
+          console.error('Failed to send success message:', err);
+        }
       } catch (err) {
-        bot.sendMessage(
-          chatId,
-          `Gagal menambah router: ${err.message || 'Tidak diketahui'}`
-        );
+        try {
+          await bot.sendMessage(
+            chatId,
+            `Gagal menambah router: ${err.message || 'Tidak diketahui'}`
+          );
+        } catch (sendErr) {
+          console.error('Failed to send error message:', sendErr);
+        }
       } finally {
         clearSession(chatId);
-        sendMainMenu(chatId);
+        try {
+          await sendMainMenu(chatId);
+        } catch (err) {
+          console.error('Failed to send main menu:', err);
+        }
       }
     }
   }
@@ -437,7 +554,7 @@ bot.onText(/\/test_connection\b/, async (msg) => {
 bot.onText(/\/add_router\b/, async (msg) => {
   const chatId = msg.chat.id;
   if (!ensureChatAllowed(chatId)) return;
-  startAddRouterFlow(chatId);
+  await startAddRouterFlow(chatId);
 });
 
 bot.onText(/\/remove_router\b/, async (msg) => {
@@ -498,7 +615,7 @@ bot.on('callback_query', async (query) => {
         await sendRouterListMessage(chatId);
         break;
       case 'add_router_flow':
-        startAddRouterFlow(chatId);
+        await startAddRouterFlow(chatId);
         break;
       case 'remove_router_select':
         await sendRouterSelection(
