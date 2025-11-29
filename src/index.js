@@ -145,6 +145,27 @@ function escapeMarkdown(text) {
     // Don't escape dots (.) and dashes (-) as they're needed for dates, times, IPs, etc.
 }
 
+// Escape HTML special characters
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Format text with consistent HTML style
+function formatHtml(text, options = {}) {
+  if (!text) return '';
+  const escaped = escapeHtml(String(text));
+  if (options.bold) return `<b>${escaped}</b>`;
+  if (options.code) return `<code>${escaped}</code>`;
+  if (options.italic) return `<i>${escaped}</i>`;
+  return escaped;
+}
+
 const parseArgs = (text) => text.split(/\s+/).slice(1).filter(Boolean);
 const makeCallbackData = (action, payload) =>
   payload ? `${action}|${encodeURIComponent(payload)}` : action;
