@@ -117,8 +117,14 @@ async function getBackupFiles(routerName = null) {
 }
 
 async function getBackupFilesByRouter(routerName, limit = 50) {
-  const allFiles = await getBackupFiles(routerName);
-  return allFiles.slice(0, limit);
+  // Convert router name to safe name for file system lookup
+  const safeRouterName = safeName(routerName);
+  const allFiles = await getBackupFiles(safeRouterName);
+  // Map back to original router name for display
+  return allFiles.map(file => ({
+    ...file,
+    routerName: routerName, // Use original name for display
+  })).slice(0, limit);
 }
 
 async function deleteBackupFile(filePath) {

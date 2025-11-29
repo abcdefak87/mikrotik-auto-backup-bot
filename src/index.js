@@ -820,18 +820,33 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
   
   const keyboard = [];
   
+  // Store file paths in a map for delete operation (use simple index to avoid long callback_data)
+  const filePathMap = new Map();
+  let fileIndex = 0;
+  
   // Add delete buttons for each file group
   for (const [key, group] of fileGroups.entries()) {
     const backupFile = group.files.find((f) => f.type === 'backup');
     if (backupFile) {
+      // Use index instead of full path to avoid BUTTON_DATA_INVALID error
+      const indexKey = `file_${page}_${fileIndex++}`;
+      filePathMap.set(indexKey, backupFile.filePath);
+      
       keyboard.push([
         {
           text: `🗑️ Hapus ${formatDate(group.timestamp, config.backup.timezone)}`,
-          callback_data: `delete_backup|${Buffer.from(backupFile.filePath).toString('base64')}`,
+          callback_data: `delete_backup|${indexKey}|${routerName ? encodeURIComponent(routerName) : 'all'}`,
         },
       ]);
     }
   }
+  
+  // Store file path map in session for this chat (will be used in delete handler)
+  if (!sessions.has(chatId)) {
+    sessions.set(chatId, {});
+  }
+  sessions.get(chatId).filePathMap = filePathMap;
+  sessions.get(chatId).filePathMapExpiry = Date.now() + (5 * 60 * 1000); // 5 minutes expiry
   
   // Add pagination buttons
   if (totalPages > 1) {
