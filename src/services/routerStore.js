@@ -95,12 +95,26 @@ async function addRouter(router) {
 }
 
 async function removeRouter(name) {
+  if (!name || typeof name !== 'string') {
+    throw new Error('Nama router tidak valid');
+  }
+  
+  // Normalize name (trim and case-insensitive matching like addRouter)
+  const trimmedName = name.trim();
+  if (!trimmedName) {
+    throw new Error('Nama router tidak boleh kosong');
+  }
+  
   // Use queue to prevent race condition when reading and writing
   return new Promise((resolve, reject) => {
     writeQueue = writeQueue.then(async () => {
       try {
         const routers = await getRouters();
-        const filtered = routers.filter((r) => r.name !== name);
+        // Use case-insensitive matching with trim (same as addRouter duplicate check)
+        const filtered = routers.filter((r) => {
+          if (!r.name) return true; // Keep routers without name (shouldn't happen, but safe)
+          return r.name.trim().toLowerCase() !== trimmedName.toLowerCase();
+        });
         if (filtered.length === routers.length) {
           throw new Error('Router tidak ditemukan');
         }

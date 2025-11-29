@@ -1530,8 +1530,11 @@ bot.on('callback_query', async (query) => {
       case 'remove_router':
         if (payload) {
           try {
+            // Log for debugging
+            console.warn(`Attempting to remove router: "${payload}"`);
             await removeRouter(payload);
-            await bot.sendMessage(chatId, `Router "${payload}" dihapus.`);
+            console.warn(`Router "${payload}" successfully removed`);
+            await bot.sendMessage(chatId, `✅ Router "${formatHtml(payload)}" dihapus.`, { parse_mode: 'HTML' });
             // Answer callback query after successful removal
             try {
               await bot.answerCallbackQuery(query.id, { text: 'Router dihapus' });
@@ -1541,10 +1544,13 @@ bot.on('callback_query', async (query) => {
               }
             }
           } catch (err) {
+            // Log error for debugging
+            console.error('Error removing router:', err.message || err);
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
             await bot.sendMessage(
               chatId,
-              `Gagal menghapus router: ${sanitizedMsg}`
+              `❌ Gagal menghapus router: ${formatHtml(sanitizedMsg)}`,
+              { parse_mode: 'HTML' }
             );
             // Answer callback query even on error
             try {
