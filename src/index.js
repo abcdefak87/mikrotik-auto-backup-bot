@@ -813,7 +813,7 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
       keyboard.push([
         {
           text: `🗑️ Hapus ${formatDate(group.timestamp, config.backup.timezone)}`,
-          callback_data: `delete_backup_${encodeURIComponent(backupFile.filePath)}`,
+          callback_data: `delete_backup|${Buffer.from(backupFile.filePath).toString('base64')}`,
         },
       ]);
     }
