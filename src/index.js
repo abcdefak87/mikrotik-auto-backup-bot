@@ -1244,16 +1244,21 @@ bot.onText(/\/test_connection\b/, async (msg) => {
     await bot.sendMessage(chatId, `Router "${routerName}" tidak ditemukan.`);
     return;
   }
-  try {
-    await testConnection(router);
-    await bot.sendMessage(chatId, `Koneksi ke "${router.name}" OK.`);
-  } catch (err) {
-    const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
-    await bot.sendMessage(
-      chatId,
-      `Koneksi ke "${router.name}" gagal: ${sanitizedMsg}`
-    );
-  }
+          try {
+            await testConnection(router);
+            await bot.sendMessage(
+              chatId,
+              `✅ **Koneksi Berhasil**\n\n📡 Router: **${router.name}**\n📍 Host: ${router.host}:${router.port || 22}\n👤 Username: ${router.username}`,
+              { parse_mode: 'Markdown' }
+            );
+          } catch (err) {
+            const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
+            await bot.sendMessage(
+              chatId,
+              `❌ **Koneksi Gagal**\n\n📡 Router: **${router.name}**\n📍 Host: ${router.host}:${router.port || 22}\n👤 Username: ${router.username}\n\n⚠️ Error: ${sanitizedMsg}`,
+              { parse_mode: 'Markdown' }
+            );
+          }
 });
 
 bot.onText(/\/add_router\b/, async (msg) => {
