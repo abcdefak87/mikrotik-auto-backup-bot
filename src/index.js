@@ -679,12 +679,20 @@ async function sendHistoryMenu(chatId) {
 async function sendStatistics(chatId, routerName = null) {
   const stats = await getStatistics(routerName);
   
+  console.log(`[sendStatistics] Stats for ${routerName || 'all'}:`, stats);
+  
   if (stats.total === 0) {
+    // Debug: show what we're looking for
+    const history = await getHistory();
+    const debugInfo = routerName 
+      ? `\n\nDebug: Mencari router "${routerName}"\nTotal history: ${history.length}\n${history.length > 0 ? `Router names di history: ${history[0].routers?.map(r => `"${r.name}"`).join(', ') || 'none'}` : 'No history'}`
+      : `\n\nDebug: Total history records: ${history.length}`;
+    
     await bot.sendMessage(
       chatId,
-      routerName
+      (routerName
         ? `Belum ada history backup untuk router "${routerName}".`
-        : 'Belum ada history backup.'
+        : 'Belum ada history backup.') + debugInfo
     );
     return;
   }
@@ -1390,6 +1398,40 @@ bot.onText(/\/health\b/, async (msg) => {
   const chatId = msg.chat.id;
   if (!ensureChatAllowed(chatId)) return;
   await sendHealthCheck(chatId);
+});
+
+bot.onText(/\/debug_history\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  
+  try {
+    const { getHistory } = require('./services/backupHistory');
+    const history = await getHistory();
+    const routers = await getRouters();
+    
+    const debugInfo = [
+      `📊 **Debug History**`,
+      '',
+      `Total History Records: ${history.length}`,
+      `Total Routers: ${routers.length}`,
+      '',
+      `Router Names:`,
+      ...routers.map(r => `- "${r.name}"`),
+      '',
+      history.length > 0 
+        ? `**Latest Record:**\nTimestamp: ${history[0].timestamp}\nRouters: ${history[0].routers?.map(r => `"${r.name}" (${r.success ? '✅' : '❌'})`).join(', ') || 'none'}`
+        : 'No history records',
+      '',
+      history.length > 0 && history[0].routers
+        ? `**All Router Names in History:**\n${[...new Set(history.flatMap(r => r.routers?.map(rt => rt.name) || []))].map(n => `- "${n}"`).join('\n')}`
+        : '',
+    ].filter(Boolean).join('\n');
+    
+    await bot.sendMessage(chatId, debugInfo, { parse_mode: 'Markdown' });
+  } catch (err) {
+    const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
+    await bot.sendMessage(chatId, `❌ Error: ${sanitizedMsg}`);
+  }
 });
 
 bot.on('callback_query', async (query) => {

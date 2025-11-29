@@ -66,11 +66,15 @@ async function addBackupRecord(record) {
     throw new Error('Backup record harus memiliki timestamp dan routers array');
   }
 
+  console.log(`[addBackupRecord] Adding record with ${record.routers.length} routers`);
+  console.log(`[addBackupRecord] Router names:`, record.routers.map(r => r.name));
+
   // Use queue to prevent race condition when reading and writing
   return new Promise((resolve, reject) => {
     writeQueue = writeQueue.then(async () => {
       try {
         const history = await getHistory();
+        console.log(`[addBackupRecord] Current history length: ${history.length}`);
         // Add new record at the beginning (most recent first)
         history.unshift(record);
         // Keep only last 1000 records to prevent file from growing too large
@@ -78,8 +82,10 @@ async function addBackupRecord(record) {
           history.splice(1000);
         }
         await saveHistory(history);
+        console.log(`[addBackupRecord] History saved successfully. New length: ${history.length}`);
         resolve(record);
       } catch (err) {
+        console.error(`[addBackupRecord] Error saving history:`, err);
         reject(err);
       }
     });
@@ -134,6 +140,11 @@ async function getRouterHistory(routerName, limit = 50) {
 
 async function getStatistics(routerName = null) {
   const history = await getHistory();
+  
+  console.log(`[getStatistics] Total history records: ${history.length}`);
+  if (history.length > 0) {
+    console.log(`[getStatistics] Sample record routers:`, history[0].routers?.map(r => r.name) || 'no routers');
+  }
   
   if (routerName) {
     // Statistics for specific router
