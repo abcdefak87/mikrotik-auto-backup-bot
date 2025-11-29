@@ -1435,10 +1435,10 @@ bot.on('callback_query', async (query) => {
           }
         }
         break;
-      case 'history_files_all':
+      case 'files_all':
         await sendBackupFilesList(chatId);
         break;
-      case 'history_files':
+      case 'files':
         if (payload) {
           await sendBackupFilesList(chatId, payload);
         }
