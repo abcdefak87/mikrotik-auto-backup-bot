@@ -1532,12 +1532,37 @@ bot.on('callback_query', async (query) => {
           try {
             await removeRouter(payload);
             await bot.sendMessage(chatId, `Router "${payload}" dihapus.`);
+            // Answer callback query after successful removal
+            try {
+              await bot.answerCallbackQuery(query.id, { text: 'Router dihapus' });
+            } catch (answerErr) {
+              if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
+                console.warn('Error answering callback query:', answerErr.message);
+              }
+            }
           } catch (err) {
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
             await bot.sendMessage(
               chatId,
               `Gagal menghapus router: ${sanitizedMsg}`
             );
+            // Answer callback query even on error
+            try {
+              await bot.answerCallbackQuery(query.id, { text: 'Gagal menghapus router' });
+            } catch (answerErr) {
+              if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
+                console.warn('Error answering callback query:', answerErr.message);
+              }
+            }
+          }
+        } else {
+          // Answer callback query if no payload
+          try {
+            await bot.answerCallbackQuery(query.id, { text: 'Router tidak ditemukan' });
+          } catch (answerErr) {
+            if (answerErr.code !== 'ETELEGRAM' || !answerErr.message.includes('query is too old')) {
+              console.warn('Error answering callback query:', answerErr.message);
+            }
           }
         }
         break;
