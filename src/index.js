@@ -240,10 +240,10 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   }
 
   const notifyMessage = triggeredBySchedule
-    ? `Menjalankan backup terjadwal (${targetRouters.length} router)...`
-    : `Menjalankan backup (${targetRouters.length} router)...`;
+    ? `⏰ <b>Menjalankan Backup Terjadwal</b>\n\n📦 Router: ${targetRouters.length}`
+    : `💾 <b>Menjalankan Backup</b>\n\n📦 Router: ${targetRouters.length}`;
   try {
-    await bot.sendMessage(chatId, notifyMessage);
+    await bot.sendMessage(chatId, notifyMessage, { parse_mode: 'HTML' });
   } catch (err) {
     // Only log if it's not a network error (to avoid spam)
     if (!isNetworkError(err)) {
@@ -387,11 +387,12 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
         try {
           await bot.sendMessage(
             config.telegram.defaultChatId,
-            `⚠️ **ALERT: Backup Gagal Berulang**\n\n` +
-            `Router: ${routerResult.name}\n` +
-            `Gagal berturut-turut: ${newFailures}x\n` +
-            `Error: ${routerResult.error || 'Tidak diketahui'}\n\n` +
-            `Silakan periksa koneksi dan konfigurasi router.`
+            `⚠️ <b>ALERT: Backup Gagal Berulang</b>\n\n` +
+            `📡 Router: <b>${formatHtml(routerResult.name)}</b>\n` +
+            `❌ Gagal berturut-turut: ${newFailures}x\n` +
+            `⚠️ Error: ${formatHtml(routerResult.error || 'Tidak diketahui')}\n\n` +
+            `Silakan periksa koneksi dan konfigurasi router.`,
+            { parse_mode: 'HTML' }
           );
         } catch (alertErr) {
           if (!isNetworkError(alertErr)) {
@@ -406,10 +407,8 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
   try {
     await bot.sendMessage(
       chatId,
-      `Backup selesai ${formatDate(
-        lastBackupMeta.successAt,
-        config.backup.timezone
-      )}. Berhasil: ${successCount}, Gagal: ${summary.length - successCount}.`
+      `✅ <b>Backup Selesai</b>\n\n🕐 Waktu: ${formatHtml(formatDate(lastBackupMeta.successAt, config.backup.timezone))}\n✅ Berhasil: ${successCount}\n❌ Gagal: ${summary.length - successCount}`,
+      { parse_mode: 'HTML' }
     );
   } catch (err) {
     // Silently fail if network is down (to avoid spam)
