@@ -1444,15 +1444,15 @@ bot.on('callback_query', async (query) => {
             await testConnection(router);
             await bot.sendMessage(
               chatId,
-              `✅ **Koneksi Berhasil**\n\n📡 Router: **${router.name}**\n📍 Host: ${router.host}:${router.port || 22}\n👤 Username: ${router.username}`,
-              { parse_mode: 'Markdown' }
+              `✅ <b>Koneksi Berhasil</b>\n\n📡 Router: <b>${formatHtml(router.name)}</b>\n📍 Host: ${formatHtml(router.host)}:${router.port || 22}\n👤 Username: ${formatHtml(router.username)}`,
+              { parse_mode: 'HTML' }
             );
           } catch (err) {
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
             await bot.sendMessage(
               chatId,
-              `❌ **Koneksi Gagal**\n\n📡 Router: **${router.name}**\n📍 Host: ${router.host}:${router.port || 22}\n👤 Username: ${router.username}\n\n⚠️ Error: ${sanitizedMsg}`,
-              { parse_mode: 'Markdown' }
+              `❌ <b>Koneksi Gagal</b>\n\n📡 Router: <b>${formatHtml(router.name)}</b>\n📍 Host: ${formatHtml(router.host)}:${router.port || 22}\n👤 Username: ${formatHtml(router.username)}\n\n⚠️ Error: ${formatHtml(sanitizedMsg)}`,
+              { parse_mode: 'HTML' }
             );
           }
         }
