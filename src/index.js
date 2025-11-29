@@ -1532,20 +1532,37 @@ bot.on('callback_query', async (query) => {
       case 'delete_backup':
         if (payload) {
           try {
-            // Decode base64 file path
-            const filePath = Buffer.from(payload, 'base64').toString('utf-8');
+            // Parse payload: indexKey|routerName
+            const parts = payload.split('|');
+            const indexKey = parts[0];
+            const routerNameParam = parts[1] ? decodeURIComponent(parts[1]) : null;
+            
+            // Get file path from session map
+            const session = sessions.get(chatId);
+            let filePath = null;
+            
+            if (session && session.filePathMap && session.filePathMapExpiry > Date.now()) {
+              filePath = session.filePathMap.get(indexKey);
+            }
+            
+            if (!filePath) {
+              await bot.sendMessage(chatId, '❌ Session expired. Silakan pilih file backup lagi.');
+              break;
+            }
+            
             const deletedFiles = await deleteBackupPair(filePath);
             await bot.sendMessage(
               chatId,
               `✅ File backup berhasil dihapus.\n\nDihapus ${deletedFiles.length} file.`
             );
-            // Refresh file list - extract router name from path
-            const pathParts = filePath.split(path.sep);
-            const routerIndex = pathParts.findIndex((p) => p === 'backups' || p === 'backup');
-            let routerName = null;
-            if (routerIndex >= 0 && pathParts[routerIndex + 1]) {
-              routerName = pathParts[routerIndex + 1];
+            
+            // Clean up session map
+            if (session && session.filePathMap) {
+              session.filePathMap.delete(indexKey);
             }
+            
+            // Refresh file list
+            const routerName = routerNameParam === 'all' ? null : routerNameParam;
             await sendBackupFilesList(chatId, routerName);
           } catch (err) {
             const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
