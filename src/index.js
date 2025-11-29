@@ -76,6 +76,36 @@ function sanitizeError(error) {
   return errorStr.replace(/password[=:]\s*['"]?[^'"]*['"]?/gi, 'password=***');
 }
 
+// Helper function to detect network errors
+function isNetworkError(err) {
+  return err.code === 'EFATAL' || 
+         err.code === 'ETIMEDOUT' || 
+         err.code === 'ECONNRESET';
+}
+
+// Validate host/IP format
+function isValidHost(host) {
+  if (!host || typeof host !== 'string') return false;
+  const trimmed = host.trim();
+  if (!trimmed) return false;
+  
+  // IPv4 regex
+  const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  // Basic hostname regex (allows letters, numbers, dots, hyphens)
+  const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9.-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  
+  if (ipv4Regex.test(trimmed)) {
+    // Validate each octet is 0-255
+    const parts = trimmed.split('.');
+    return parts.every(part => {
+      const num = parseInt(part, 10);
+      return num >= 0 && num <= 255;
+    });
+  }
+  
+  return hostnameRegex.test(trimmed);
+}
+
 const formatDate = (date) =>
   date
     ? new Intl.DateTimeFormat('id-ID', {
@@ -182,7 +212,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     await bot.sendMessage(chatId, notifyMessage);
   } catch (err) {
     // Only log if it's not a network error (to avoid spam)
-    if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+    if (!isNetworkError(err)) {
       console.error('Failed to send backup notification:', err.message || err);
     }
     // Continue with backup even if notification fails
@@ -205,11 +235,11 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
         });
       } catch (docErr) {
         // Only log if it's not a network error (to avoid spam)
-        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+        if (!isNetworkError(docErr)) {
           console.error(`Failed to send backup document for ${router.name}:`, docErr.message || docErr);
         }
         // Don't try to send error message if network is down (will fail again)
-        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+        if (!isNetworkError(docErr)) {
           try {
             const sanitizedMsg = sanitizeError(docErr.message || 'Tidak diketahui');
             await bot.sendMessage(
@@ -218,7 +248,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
             );
           } catch (msgErr) {
             // Silently fail if network is down
-            if (msgErr.code !== 'EFATAL' && msgErr.code !== 'ETIMEDOUT' && msgErr.code !== 'ECONNRESET') {
+            if (!isNetworkError(msgErr)) {
               console.error('Failed to send error message:', msgErr.message || msgErr);
             }
           }
@@ -241,11 +271,11 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
         });
       } catch (docErr) {
         // Only log if it's not a network error (to avoid spam)
-        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+        if (!isNetworkError(docErr)) {
           console.error(`Failed to send export document for ${router.name}:`, docErr.message || docErr);
         }
         // Don't try to send error message if network is down (will fail again)
-        if (docErr.code !== 'EFATAL' && docErr.code !== 'ETIMEDOUT' && docErr.code !== 'ECONNRESET') {
+        if (!isNetworkError(docErr)) {
           try {
             const sanitizedMsg = sanitizeError(docErr.message || 'Tidak diketahui');
             await bot.sendMessage(
@@ -254,7 +284,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
             );
           } catch (msgErr) {
             // Silently fail if network is down
-            if (msgErr.code !== 'EFATAL' && msgErr.code !== 'ETIMEDOUT' && msgErr.code !== 'ECONNRESET') {
+            if (!isNetworkError(msgErr)) {
               console.error('Failed to send error message:', msgErr.message || msgErr);
             }
           }
@@ -273,7 +303,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     } catch (err) {
       const sanitizedError = sanitizeError(err);
       // Only log if it's not a network error (to avoid spam)
-      if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+      if (!isNetworkError(err)) {
         console.error('Backup error:', sanitizedError);
       }
       const errorMessage = sanitizeError(err.message || 'Tidak diketahui');
@@ -283,7 +313,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
         error: errorMessage,
       });
       // Don't try to send error message if network is down (will fail again)
-      if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+      if (!isNetworkError(err)) {
         try {
           await bot.sendMessage(
             chatId,
@@ -291,7 +321,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
           );
         } catch (msgErr) {
           // Silently fail if network is down
-          if (msgErr.code !== 'EFATAL' && msgErr.code !== 'ETIMEDOUT' && msgErr.code !== 'ECONNRESET') {
+          if (!isNetworkError(msgErr)) {
             console.error('Failed to send backup error message:', msgErr.message || msgErr);
           }
         }
@@ -314,7 +344,7 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     );
   } catch (err) {
     // Silently fail if network is down (to avoid spam)
-    if (err.code !== 'EFATAL' && err.code !== 'ETIMEDOUT' && err.code !== 'ECONNRESET') {
+    if (!isNetworkError(err)) {
       console.error('Failed to send backup summary:', err.message || err);
     }
   }
@@ -323,8 +353,11 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
 // Validate timezone
 function isValidTimezone(timezone) {
   try {
-    // Try to create a date with the timezone
-    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    // Use explicit locale to avoid system default
+    const formatter = Intl.DateTimeFormat('en-US', { timeZone: timezone });
+    // Also try to format a date to ensure timezone is valid
+    const testDate = new Date();
+    formatter.format(testDate);
     return true;
   } catch (e) {
     return false;
@@ -395,34 +428,38 @@ function getNextRunTime() {
   const schedule = customSchedule || config.backup.cronSchedule;
   
   try {
-    // Parse cron expression manually for common patterns
-    // Format: minute hour day month dayOfWeek
-    const parts = schedule.trim().split(/\s+/);
-    if (parts.length !== 5) return null;
+    const parser = require('cron-parser');
+    const timezone = config.backup.timezone || 'Asia/Jakarta';
     
-    const [minute, hour, day, month, dayOfWeek] = parts;
-    const now = new Date();
-    
-    // Simple calculation for daily schedule (e.g., "0 18 * * *")
-    if (day === '*' && month === '*' && dayOfWeek === '*') {
-      const nextRun = new Date(now);
-      const scheduleHour = hour === '*' ? 0 : parseInt(hour, 10);
-      const scheduleMinute = minute === '*' ? 0 : parseInt(minute, 10);
-      
-      nextRun.setHours(scheduleHour, scheduleMinute, 0, 0);
-      
-      // If time has passed today, schedule for tomorrow
-      if (nextRun <= now) {
-        nextRun.setDate(nextRun.getDate() + 1);
-      }
-      
-      return nextRun;
-    }
-    
-    // For other patterns, return null (too complex to calculate manually)
-    return null;
+    const interval = parser.parseExpression(schedule, {
+      tz: timezone
+    });
+    return interval.next().toDate();
   } catch (err) {
     console.error('Error calculating next run time:', err);
+    // Fallback to simple calculation for daily schedules
+    try {
+      const parts = schedule.trim().split(/\s+/);
+      if (parts.length === 5) {
+        const [minute, hour, day, month, dayOfWeek] = parts;
+        if (day === '*' && month === '*' && dayOfWeek === '*') {
+          const now = new Date();
+          const nextRun = new Date(now);
+          const scheduleHour = hour === '*' ? 0 : parseInt(hour, 10);
+          const scheduleMinute = minute === '*' ? 0 : parseInt(minute, 10);
+          
+          nextRun.setHours(scheduleHour, scheduleMinute, 0, 0);
+          
+          if (nextRun <= now) {
+            nextRun.setDate(nextRun.getDate() + 1);
+          }
+          
+          return nextRun;
+        }
+      }
+    } catch (fallbackErr) {
+      // Ignore fallback errors
+    }
     return null;
   }
 }
@@ -647,6 +684,17 @@ function setSessionTimeout(chatId, timeoutMs = 30 * 60 * 1000) {
   sessionTimeouts.set(chatId, timeout);
 }
 
+// Periodic cleanup for stale session timeouts (every hour)
+setInterval(() => {
+  for (const [chatId, timeout] of sessionTimeouts.entries()) {
+    // Check if session is stale (session deleted but timeout still exists)
+    if (!sessions.has(chatId)) {
+      clearTimeout(timeout);
+      sessionTimeouts.delete(chatId);
+    }
+  }
+}, 60 * 60 * 1000); // Every hour
+
 async function handleSessionInput(chatId, text) {
   const session = sessions.get(chatId);
   if (!session) return;
@@ -680,7 +728,15 @@ async function handleSessionInput(chatId, text) {
         }
         return;
       }
-      session.data.host = value;
+      if (!isValidHost(value)) {
+        try {
+          await bot.sendMessage(chatId, 'Format host/IP tidak valid. Silakan masukkan IP address (contoh: 192.168.88.1) atau hostname (contoh: router.example.com):');
+        } catch (err) {
+          console.error('Failed to send message:', err);
+        }
+        return;
+      }
+      session.data.host = value.trim();
       session.step = 'username';
       try {
         await bot.sendMessage(chatId, 'Masukkan username router:');
@@ -811,8 +867,16 @@ async function handleSessionInput(chatId, text) {
       
       try {
         // Test if cron expression is valid by trying to create a schedule
-        const testSchedule = cron.schedule(cronExpression, () => {}, { timezone: config.backup.timezone });
-        testSchedule.stop();
+        let testSchedule = null;
+        try {
+          testSchedule = cron.schedule(cronExpression, () => {}, { timezone: config.backup.timezone });
+          testSchedule.stop();
+        } catch (scheduleErr) {
+          if (testSchedule) {
+            testSchedule.stop();
+          }
+          throw scheduleErr;
+        }
         
         // If valid, update schedule
         customSchedule = cronExpression;
@@ -1124,7 +1188,7 @@ bot.on('polling_error', (err) => {
   // Only log every 10th error or if it's a new error type
   if (pollingErrorCount === 0 || pollingErrorCount % 10 === 0) {
     // Handle different types of errors
-    if (err.code === 'EFATAL' || err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
+    if (isNetworkError(err)) {
       if (pollingErrorCount === 1) {
         console.error('Network error detected. Bot will continue polling...');
       } else {

@@ -67,16 +67,21 @@ async function addRouter(router) {
   }
   
   // Validate name is not empty after trimming
-  if (!router.name.trim()) {
+  const trimmedName = router.name.trim();
+  if (!trimmedName) {
     throw new Error('Nama router tidak boleh kosong');
   }
+  
+  // Normalize name for duplicate check (case-insensitive, trimmed)
+  router.name = trimmedName;
   
   // Use queue to prevent race condition when reading and writing
   return new Promise((resolve, reject) => {
     writeQueue = writeQueue.then(async () => {
       try {
         const routers = await getRouters();
-        if (routers.some((r) => r.name === router.name)) {
+        // Check for duplicate (case-insensitive)
+        if (routers.some((r) => r.name && r.name.trim().toLowerCase() === trimmedName.toLowerCase())) {
           throw new Error('Nama router sudah digunakan');
         }
         routers.push(router);
