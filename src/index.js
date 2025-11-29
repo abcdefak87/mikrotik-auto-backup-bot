@@ -10,6 +10,11 @@ const {
   addRouter,
   removeRouter,
 } = require('./services/routerStore');
+const {
+  addBackupRecord,
+  getRouterHistory,
+  getStatistics,
+} = require('./services/backupHistory');
 
 if (!config.telegram.token) {
   console.error(
@@ -42,6 +47,8 @@ let scheduledJob = null;
 const sessions = new Map();
 const sessionTimeouts = new Map(); // Track session timeouts for auto-cleanup
 let customSchedule = null; // Store custom schedule set by user
+const startTime = Date.now(); // Track bot start time for health check
+const routerFailureCounts = new Map(); // Track consecutive failures per router
 
 // Load custom schedule from file on startup
 const scheduleFilePath = path.join(__dirname, '..', 'data', 'customSchedule.json');
@@ -163,6 +170,11 @@ const sendMainMenu = async (chatId) => {
     [
       {
         text: '🧪 Test Koneksi Router',
+      },
+    ],
+    [
+      {
+        text: '📈 History & Statistics',
       },
     ],
   ];
@@ -330,10 +342,54 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
     }
   }
 
+  const timestamp = new Date();
   lastBackupMeta = {
-    successAt: new Date(),
+    successAt: timestamp,
     routers: summary,
   };
+
+  // Save to backup history
+  try {
+    await addBackupRecord({
+      timestamp: timestamp.toISOString(),
+      triggeredBySchedule,
+      routers: summary,
+    });
+  } catch (err) {
+    console.error('Failed to save backup history:', err.message);
+  }
+
+  // Update failure counts and check for alerts
+  const failureThreshold = 3;
+  for (const routerResult of summary) {
+    if (routerResult.success) {
+      // Reset failure count on success
+      routerFailureCounts.set(routerResult.name, 0);
+    } else {
+      // Increment failure count
+      const currentFailures = routerFailureCounts.get(routerResult.name) || 0;
+      const newFailures = currentFailures + 1;
+      routerFailureCounts.set(routerResult.name, newFailures);
+      
+      // Alert if threshold exceeded
+      if (newFailures >= failureThreshold && config.telegram.defaultChatId) {
+        try {
+          await bot.sendMessage(
+            config.telegram.defaultChatId,
+            `⚠️ **ALERT: Backup Gagal Berulang**\n\n` +
+            `Router: ${routerResult.name}\n` +
+            `Gagal berturut-turut: ${newFailures}x\n` +
+            `Error: ${routerResult.error || 'Tidak diketahui'}\n\n` +
+            `Silakan periksa koneksi dan konfigurasi router.`
+          );
+        } catch (alertErr) {
+          if (!isNetworkError(alertErr)) {
+            console.error('Failed to send failure alert:', alertErr.message);
+          }
+        }
+      }
+    }
+  }
 
   const successCount = summary.filter((s) => s.success).length;
   try {
@@ -518,6 +574,171 @@ async function sendRouterListMessage(chatId) {
     )
     .join('\n');
   await bot.sendMessage(chatId, `Daftar router:\n${lines}`);
+}
+
+async function sendHealthCheck(chatId) {
+  const uptime = Date.now() - startTime;
+  const uptimeHours = Math.floor(uptime / (1000 * 60 * 60));
+  const uptimeMinutes = Math.floor((uptime % (1000 * 60 * 60)) / (1000 * 60));
+  const uptimeSeconds = Math.floor((uptime % (1000 * 60)) / 1000);
+  
+  const memory = process.memoryUsage();
+  const memoryMB = {
+    rss: (memory.rss / 1024 / 1024).toFixed(2),
+    heapUsed: (memory.heapUsed / 1024 / 1024).toFixed(2),
+    heapTotal: (memory.heapTotal / 1024 / 1024).toFixed(2),
+  };
+  
+  const routers = await getRouters();
+  const stats = await getStatistics();
+  
+  const healthInfo = [
+    '🏥 **Health Check**',
+    '',
+    '⏱️ **Uptime:**',
+    `${uptimeHours}j ${uptimeMinutes}m ${uptimeSeconds}s`,
+    '',
+    '💾 **Memory Usage:**',
+    `RSS: ${memoryMB.rss} MB`,
+    `Heap Used: ${memoryMB.heapUsed} MB`,
+    `Heap Total: ${memoryMB.heapTotal} MB`,
+    '',
+    '📊 **Backup Statistics:**',
+    `Total Backup: ${stats.total}`,
+    `Berhasil: ${stats.success}`,
+    `Gagal: ${stats.failed}`,
+    `Success Rate: ${stats.successRate}%`,
+    '',
+    '🔧 **System:**',
+    `Total Router: ${routers.length}`,
+    `Auto Backup: ${scheduledJob ? '✅ Aktif' : '❌ Nonaktif'}`,
+    `Timezone: ${config.backup.timezone}`,
+  ].join('\n');
+  
+  await bot.sendMessage(chatId, healthInfo, { parse_mode: 'Markdown' });
+}
+
+async function sendHistoryMenu(chatId) {
+  const routers = await getRouters();
+  if (!routers.length) {
+    await bot.sendMessage(chatId, 'Belum ada router terdaftar.');
+    return;
+  }
+  
+  const keyboard = [
+    [
+      {
+        text: '📊 Statistics Keseluruhan',
+        callback_data: 'history_stats_all',
+      },
+    ],
+  ];
+  
+  // Add router-specific history buttons
+  const routerButtons = routers.map((router) => ({
+    text: `📈 ${router.name}`,
+    callback_data: `history_stats_${encodeURIComponent(router.name)}`,
+  }));
+  
+  const routerChunks = chunkButtons(routerButtons, 2);
+  keyboard.push(...routerChunks);
+  
+  keyboard.push([
+    {
+      text: '📋 History Detail',
+      callback_data: 'history_detail',
+    },
+  ]);
+  
+  keyboard.push([
+    {
+      text: '⬅️ Kembali ke Menu',
+      callback_data: 'menu',
+    },
+  ]);
+  
+  await bot.sendMessage(chatId, '📈 **History & Statistics**\n\nPilih opsi:', {
+    reply_markup: {
+      inline_keyboard: keyboard,
+    },
+    parse_mode: 'Markdown',
+  });
+}
+
+async function sendStatistics(chatId, routerName = null) {
+  const stats = await getStatistics(routerName);
+  
+  if (stats.total === 0) {
+    await bot.sendMessage(
+      chatId,
+      routerName
+        ? `Belum ada history backup untuk router "${routerName}".`
+        : 'Belum ada history backup.'
+    );
+    return;
+  }
+  
+  const title = routerName
+    ? `📊 **Statistics: ${routerName}**`
+    : '📊 **Statistics Keseluruhan**';
+  
+  const statsText = [
+    title,
+    '',
+    `Total Backup: ${stats.total}`,
+    `✅ Berhasil: ${stats.success}`,
+    `❌ Gagal: ${stats.failed}`,
+    `📈 Success Rate: ${stats.successRate}%`,
+  ];
+  
+    if (routerName) {
+    statsText.push('');
+    statsText.push(`⚠️ Gagal Berturut-turut: ${stats.consecutiveFailures}x`);
+    if (stats.lastBackup && stats.lastBackup.timestamp) {
+      statsText.push(
+        `✅ Backup Terakhir: ${formatDate(new Date(stats.lastBackup.timestamp), config.backup.timezone)}`
+      );
+    } else {
+      statsText.push('❌ Belum ada backup yang berhasil');
+    }
+  } else {
+    statsText.push('');
+    statsText.push(`📦 Total Backup Session: ${stats.totalBackups}`);
+  }
+  
+  await bot.sendMessage(chatId, statsText.join('\n'), { parse_mode: 'Markdown' });
+}
+
+async function sendHistoryDetail(chatId, routerName = null, limit = 10) {
+  if (!routerName) {
+    await bot.sendMessage(chatId, 'Pilih router terlebih dahulu untuk melihat history detail.');
+    return;
+  }
+  
+  const history = await getRouterHistory(routerName, limit);
+  
+  if (history.length === 0) {
+    await bot.sendMessage(chatId, `Belum ada history backup untuk router "${routerName}".`);
+    return;
+  }
+  
+  const historyLines = history.map((record, idx) => {
+    const date = formatDate(new Date(record.timestamp), config.backup.timezone);
+    const status = record.success ? '✅' : '❌';
+    const schedule = record.triggeredBySchedule ? '🕐' : '👤';
+    const error = record.error ? ` (${record.error})` : '';
+    return `${idx + 1}. ${status} ${schedule} ${date}${error}`;
+  });
+  
+  const historyText = [
+    `📋 **History Backup: ${routerName}**`,
+    '',
+    ...historyLines,
+    '',
+    `Menampilkan ${history.length} backup terakhir.`,
+  ].join('\n');
+  
+  await bot.sendMessage(chatId, historyText, { parse_mode: 'Markdown' });
 }
 
 
@@ -1002,6 +1223,12 @@ bot.onText(/\/cancel\b/, async (msg) => {
   }
 });
 
+bot.onText(/\/health\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  await sendHealthCheck(chatId);
+});
+
 bot.on('callback_query', async (query) => {
   if (!query.message) return;
   const chatId = query.message.chat.id;
@@ -1088,8 +1315,38 @@ bot.on('callback_query', async (query) => {
           }
         }
         break;
+      case 'history_stats_all':
+        await sendStatistics(chatId);
+        break;
+      case 'history_stats':
+        if (payload) {
+          await sendStatistics(chatId, payload);
+        }
+        break;
+      case 'history_detail':
+        await sendRouterSelection(
+          chatId,
+          'history_detail_router',
+          'Belum ada router untuk melihat history.'
+        );
+        break;
+      case 'history_detail_router':
+        if (payload) {
+          await sendHistoryDetail(chatId, payload);
+        }
+        break;
       default:
-        await bot.sendMessage(chatId, 'Perintah tidak dikenal.');
+        // Handle history_stats_<routerName> pattern
+        if (action.startsWith('history_stats_')) {
+          const routerName = action.replace('history_stats_', '');
+          if (routerName === 'all') {
+            await sendStatistics(chatId);
+          } else {
+            await sendStatistics(chatId, decodeURIComponent(routerName));
+          }
+        } else {
+          await bot.sendMessage(chatId, 'Perintah tidak dikenal.');
+        }
     }
   } finally {
     await bot.answerCallbackQuery(query.id);
@@ -1160,6 +1417,9 @@ bot.on('message', async (msg) => {
         return;
       case '🧪 Test Koneksi Router':
         await sendRouterSelection(chatId, 'test_router', 'Belum ada router untuk diuji.');
+        return;
+      case '📈 History & Statistics':
+        await sendHistoryMenu(chatId);
         return;
     }
     
