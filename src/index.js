@@ -258,15 +258,39 @@ function scheduleJob(cronSchedule = null) {
 
 function getNextRunTime() {
   if (!scheduledJob) return null;
+  
+  // Get current schedule
+  const schedule = customSchedule || config.backup.cronSchedule;
+  
   try {
-    // node-cron v4: nextDates() returns an array, get first date
-    const nextDates = scheduledJob.nextDates(1);
-    if (nextDates && nextDates.length > 0) {
-      return nextDates[0].toDate();
+    // Parse cron expression manually for common patterns
+    // Format: minute hour day month dayOfWeek
+    const parts = schedule.trim().split(/\s+/);
+    if (parts.length !== 5) return null;
+    
+    const [minute, hour, day, month, dayOfWeek] = parts;
+    const now = new Date();
+    
+    // Simple calculation for daily schedule (e.g., "0 18 * * *")
+    if (day === '*' && month === '*' && dayOfWeek === '*') {
+      const nextRun = new Date(now);
+      const scheduleHour = hour === '*' ? 0 : parseInt(hour, 10);
+      const scheduleMinute = minute === '*' ? 0 : parseInt(minute, 10);
+      
+      nextRun.setHours(scheduleHour, scheduleMinute, 0, 0);
+      
+      // If time has passed today, schedule for tomorrow
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+      
+      return nextRun;
     }
+    
+    // For other patterns, return null (too complex to calculate manually)
     return null;
   } catch (err) {
-    console.error('Error getting next run time:', err);
+    console.error('Error calculating next run time:', err);
     return null;
   }
 }
