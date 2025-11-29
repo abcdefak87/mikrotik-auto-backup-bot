@@ -1604,7 +1604,6 @@ bot.on('callback_query', async (query) => {
         }
       }
     }
-  }
 });
 
 bot.on('message', async (msg) => {
