@@ -66,20 +66,16 @@ const sendMainMenu = async (chatId) => {
       {
         text: '📊 Status Backup',
       },
+      {
+        text: '📋 Daftar Router',
+      },
     ],
     [
       {
         text: '💾 Backup Semua Router',
       },
-    ],
-    [
       {
         text: '📍 Backup Router Tertentu',
-      },
-    ],
-    [
-      {
-        text: '📋 Daftar Router',
       },
     ],
     [
