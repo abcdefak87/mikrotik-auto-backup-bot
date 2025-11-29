@@ -15,6 +15,12 @@ const {
   getRouterHistory,
   getStatistics,
 } = require('./services/backupHistory');
+const {
+  getBackupFiles,
+  getBackupFilesByRouter,
+  deleteBackupPair,
+  formatFileSize,
+} = require('./services/backupFiles');
 
 if (!config.telegram.token) {
   console.error(
@@ -628,27 +634,29 @@ async function sendHistoryMenu(chatId) {
   const keyboard = [
     [
       {
-        text: '📊 Statistics Keseluruhan',
+        text: '📊 Statistics',
         callback_data: 'history_stats_all',
+      },
+      {
+        text: '📁 File Backup',
+        callback_data: 'history_files_all',
       },
     ],
   ];
   
-  // Add router-specific history buttons
-  const routerButtons = routers.map((router) => ({
-    text: `📈 ${router.name}`,
-    callback_data: `history_stats_${encodeURIComponent(router.name)}`,
-  }));
-  
-  const routerChunks = chunkButtons(routerButtons, 2);
-  keyboard.push(...routerChunks);
-  
-  keyboard.push([
+  // Add router-specific buttons in 2 columns
+  const routerButtons = routers.map((router) => [
     {
-      text: '📋 History Detail',
-      callback_data: 'history_detail',
+      text: `📈 ${router.name}`,
+      callback_data: `history_stats_${encodeURIComponent(router.name)}`,
+    },
+    {
+      text: `📁 ${router.name}`,
+      callback_data: `history_files_${encodeURIComponent(router.name)}`,
     },
   ]);
+  
+  keyboard.push(...routerButtons);
   
   keyboard.push([
     {
@@ -739,6 +747,121 @@ async function sendHistoryDetail(chatId, routerName = null, limit = 10) {
   ].join('\n');
   
   await bot.sendMessage(chatId, historyText, { parse_mode: 'Markdown' });
+}
+
+async function sendBackupFilesList(chatId, routerName = null, page = 0) {
+  const limit = 10;
+  const offset = page * limit;
+  
+  let files;
+  let title;
+  
+  if (routerName) {
+    files = await getBackupFilesByRouter(routerName, 100); // Get more to allow pagination
+    title = `📁 **File Backup: ${routerName}**`;
+  } else {
+    files = await getBackupFiles();
+    title = '📁 **File Backup: Semua Router**';
+  }
+  
+  if (files.length === 0) {
+    await bot.sendMessage(
+      chatId,
+      routerName
+        ? `Belum ada file backup untuk router "${routerName}".`
+        : 'Belum ada file backup.'
+    );
+    return;
+  }
+  
+  const totalPages = Math.ceil(files.length / limit);
+  const pageFiles = files.slice(offset, offset + limit);
+  
+  // Group files by timestamp (backup + rsc pairs)
+  const fileGroups = new Map();
+  for (const file of pageFiles) {
+    const timestamp = format(file.timestamp, 'yyyyMMdd_HHmmss');
+    const key = `${file.routerName}_${timestamp}`;
+    
+    if (!fileGroups.has(key)) {
+      fileGroups.set(key, {
+        routerName: file.routerName,
+        timestamp: file.timestamp,
+        files: [],
+      });
+    }
+    
+    fileGroups.get(key).files.push(file);
+  }
+  
+  const fileList = Array.from(fileGroups.values())
+    .map((group, idx) => {
+      const date = formatDate(group.timestamp, config.backup.timezone);
+      const backupFile = group.files.find((f) => f.type === 'backup');
+      const rscFile = group.files.find((f) => f.type === 'rsc');
+      const totalSize = group.files.reduce((sum, f) => sum + f.size, 0);
+      
+      return `${offset + idx + 1}. ${date}\n   📦 ${backupFile ? formatFileSize(backupFile.size) : 'N/A'} | 📄 ${rscFile ? formatFileSize(rscFile.size) : 'N/A'}\n   💾 Total: ${formatFileSize(totalSize)}`;
+    });
+  
+  const keyboard = [];
+  
+  // Add delete buttons for each file group
+  for (const [key, group] of fileGroups.entries()) {
+    const backupFile = group.files.find((f) => f.type === 'backup');
+    if (backupFile) {
+      keyboard.push([
+        {
+          text: `🗑️ Hapus ${formatDate(group.timestamp, config.backup.timezone)}`,
+          callback_data: `delete_backup_${encodeURIComponent(backupFile.filePath)}`,
+        },
+      ]);
+    }
+  }
+  
+  // Add pagination buttons
+  if (totalPages > 1) {
+    const paginationRow = [];
+    if (page > 0) {
+      paginationRow.push({
+        text: '⬅️ Sebelumnya',
+        callback_data: `files_page_${routerName ? encodeURIComponent(routerName) : 'all'}_${page - 1}`,
+      });
+    }
+    paginationRow.push({
+      text: `${page + 1}/${totalPages}`,
+      callback_data: 'noop',
+    });
+    if (page < totalPages - 1) {
+      paginationRow.push({
+        text: 'Selanjutnya ➡️',
+        callback_data: `files_page_${routerName ? encodeURIComponent(routerName) : 'all'}_${page + 1}`,
+      });
+    }
+    keyboard.push(paginationRow);
+  }
+  
+  keyboard.push([
+    {
+      text: '⬅️ Kembali',
+      callback_data: 'history_files_all',
+    },
+  ]);
+  
+  const messageText = [
+    title,
+    '',
+    ...fileList,
+    '',
+    `Total: ${files.length} file backup | Halaman ${page + 1}/${totalPages}`,
+  ].join('\n');
+  
+  await bot.sendMessage(chatId, messageText, {
+    reply_markup: {
+      inline_keyboard: keyboard,
+    },
+    parse_mode: 'Markdown',
+  });
 }
 
 
@@ -1335,6 +1458,48 @@ bot.on('callback_query', async (query) => {
           await sendHistoryDetail(chatId, payload);
         }
         break;
+      case 'history_files_all':
+        await sendBackupFilesList(chatId);
+        break;
+      case 'history_files':
+        if (payload) {
+          await sendBackupFilesList(chatId, payload);
+        }
+        break;
+      case 'delete_backup':
+        if (payload) {
+          try {
+            // Decode base64 file path
+            const filePath = Buffer.from(payload, 'base64').toString('utf-8');
+            const deletedFiles = await deleteBackupPair(filePath);
+            await bot.sendMessage(
+              chatId,
+              `✅ File backup berhasil dihapus.\n\nDihapus ${deletedFiles.length} file.`
+            );
+            // Refresh file list - extract router name from path
+            const pathParts = filePath.split(path.sep);
+            const routerIndex = pathParts.findIndex((p) => p === 'backups' || p === 'backup');
+            let routerName = null;
+            if (routerIndex >= 0 && pathParts[routerIndex + 1]) {
+              routerName = pathParts[routerIndex + 1];
+            }
+            await sendBackupFilesList(chatId, routerName);
+          } catch (err) {
+            const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
+            await bot.sendMessage(chatId, `❌ Gagal menghapus file backup: ${sanitizedMsg}`);
+          }
+        }
+        break;
+      case 'files_page':
+        // Handle pagination: files_page_<routerName>_<page>
+        if (payload) {
+          const parts = payload.split('_');
+          const page = parseInt(parts[parts.length - 1], 10);
+          const routerPart = parts.slice(0, -1).join('_');
+          const routerName = routerPart === 'all' ? null : decodeURIComponent(routerPart);
+          await sendBackupFilesList(chatId, routerName, page);
+        }
+        break;
       default:
         // Handle history_stats_<routerName> pattern
         if (action.startsWith('history_stats_')) {
@@ -1343,6 +1508,14 @@ bot.on('callback_query', async (query) => {
             await sendStatistics(chatId);
           } else {
             await sendStatistics(chatId, decodeURIComponent(routerName));
+          }
+        } else if (action.startsWith('history_files_')) {
+          // Handle history_files_<routerName> pattern
+          const routerName = action.replace('history_files_', '');
+          if (routerName === 'all') {
+            await sendBackupFilesList(chatId);
+          } else {
+            await sendBackupFilesList(chatId, decodeURIComponent(routerName));
           }
         } else {
           await bot.sendMessage(chatId, 'Perintah tidak dikenal.');
