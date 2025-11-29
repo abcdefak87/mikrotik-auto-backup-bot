@@ -778,7 +778,7 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
   keyboard.push([
     {
       text: '⬅️ Kembali',
-      callback_data: 'history_files_all',
+      callback_data: routerName ? `files_${encodeURIComponent(routerName)}` : 'files_all',
     },
   ]);
   
@@ -1495,9 +1495,9 @@ bot.on('callback_query', async (query) => {
         }
         break;
       default:
-        if (action.startsWith('history_files_')) {
-          // Handle history_files_<routerName> pattern
-          const routerName = action.replace('history_files_', '');
+        if (action.startsWith('files_')) {
+          // Handle files_<routerName> pattern
+          const routerName = action.replace('files_', '');
           if (routerName === 'all') {
             await sendBackupFilesList(chatId);
           } else {
