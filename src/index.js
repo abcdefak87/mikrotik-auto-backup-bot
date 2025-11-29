@@ -568,17 +568,17 @@ async function sendStatusMessage(chatId) {
       routerLines,
       '',
       `📁 <b>Folder Lokal:</b>`,
-      `<code>${config.backup.directory.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code>`,
+      `<code>${formatHtml(config.backup.directory)}</code>`,
       '',
       `⏰ <b>Jadwal Backup:</b>`,
-      `${scheduleTime.replace(/</g, '&lt;').replace(/>/g, '&gt;')} (${config.backup.timezone.replace(/</g, '&lt;').replace(/>/g, '&gt;')})`,
+      `${formatHtml(scheduleTime)} (${formatHtml(config.backup.timezone)})`,
       '',
       `🕐 <b>Backup Terakhir:</b>`,
-      lastBackupTime.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      formatHtml(lastBackupTime),
       lastSummary ? `\n📋 <b>Ringkasan Terakhir:</b>\n${lastSummary}` : '',
       '',
       `⏭️ <b>Backup Berikutnya:</b>`,
-      nextRunTime.replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      formatHtml(nextRunTime),
     ]
       .filter(Boolean)
       .join('\n');
@@ -680,11 +680,11 @@ async function sendFileBackupMenu(chatId) {
     },
   ]);
   
-  await bot.sendMessage(chatId, '📁 **File Backup**\n\nPilih router untuk melihat file backup:', {
+  await bot.sendMessage(chatId, '📁 <b>File Backup</b>\n\nPilih router untuk melihat file backup:', {
     reply_markup: {
       inline_keyboard: keyboard,
     },
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
   });
 }
 
@@ -836,7 +836,7 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
     reply_markup: {
       inline_keyboard: keyboard,
     },
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
   });
 }
 
@@ -849,8 +849,8 @@ async function sendAutoBackupSettings(chatId) {
   const readableTime = cronToTime(currentSchedule) || currentSchedule;
   
   const statusText = isEnabled 
-    ? `✅ Aktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun, config.backup.timezone) : 'Tidak diketahui'}`
-    : `❌ Nonaktif\nWaktu: ${readableTime} (setiap hari)\nTimezone: ${config.backup.timezone}\nBelum ada jadwal backup otomatis yang diaktifkan.`;
+    ? `✅ <b>Aktif</b>\n⏰ Waktu: ${formatHtml(readableTime)} (setiap hari)\n🌍 Timezone: ${formatHtml(config.backup.timezone)}\n⏭️ Backup berikut: ${nextRun ? formatHtml(formatDate(nextRun, config.backup.timezone)) : 'Tidak diketahui'}`
+    : `❌ <b>Nonaktif</b>\n⏰ Waktu: ${formatHtml(readableTime)} (setiap hari)\n🌍 Timezone: ${formatHtml(config.backup.timezone)}\n⚠️ Belum ada jadwal backup otomatis yang diaktifkan.`;
 
   const keyboard = [
     [
@@ -872,13 +872,14 @@ async function sendAutoBackupSettings(chatId) {
 
   await bot.sendMessage(
     chatId,
-    `⚙️ Setting Auto Backup\n\n${statusText}\n\nTotal router: ${routers.length}`,
+    `⚙️ <b>Setting Auto Backup</b>\n\n${statusText}\n\n📦 Total router: ${routers.length}`,
     {
       reply_markup: {
         keyboard,
         resize_keyboard: true,
         one_time_keyboard: false,
       },
+      parse_mode: 'HTML',
     }
   );
 }
@@ -894,7 +895,8 @@ async function startScheduleSettingFlow(chatId) {
   try {
     await bot.sendMessage(
       chatId,
-      'Atur jadwal backup otomatis.\n\nMasukkan waktu backup dalam format:\n**HH:MM** (24 jam)\n\nContoh:\n- `18:00` = Setiap hari jam 18:00\n- `00:00` = Setiap hari jam 00:00 (tengah malam)\n- `09:30` = Setiap hari jam 09:30\n\nMasukkan waktu (HH:MM):'
+      '⏰ <b>Atur Jadwal Backup</b>\n\nMasukkan waktu backup dalam format:\n<b>HH:MM</b> (24 jam)\n\nContoh:\n• <code>18:00</code> = Setiap hari jam 18:00\n• <code>00:00</code> = Setiap hari jam 00:00 (tengah malam)\n• <code>09:30</code> = Setiap hari jam 09:30\n\nMasukkan waktu (HH:MM):',
+      { parse_mode: 'HTML' }
     );
   } catch (err) {
     console.error('Failed to send message in startScheduleSettingFlow:', err);
