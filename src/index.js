@@ -497,8 +497,7 @@ async function sendBackupNotificationToGroup(summary, triggeredBySchedule = fals
           
           downloadLinks.push(
             `\n📡 <b>${formatHtml(r.name)}:</b>`,
-            `  • <a href="${downloadUrl}">Download Backup</a>`,
-            `  🔑 Password: <code>${routerToken.password}</code>`
+            `  • <a href="${downloadUrl}">Download Backup</a>`
           );
         } catch (err) {
           logger.error(`Failed to create download token for ${r.name}`, err);

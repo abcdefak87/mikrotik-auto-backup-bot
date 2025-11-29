@@ -49,26 +49,26 @@ function startDownloadServer() {
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              padding: 20px;
-            }
-            .container {
-              background: white;
-              border-radius: 12px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-              padding: 40px;
-              max-width: 600px;
-              width: 100%;
-              text-align: center;
-            }
-            h1 { color: #333; margin-bottom: 20px; }
-            .empty { color: #666; }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+          }
+          .container {
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+          }
+          h1 { color: #333; margin-bottom: 20px; font-size: 20px; }
+          .empty { color: #666; }
           </style>
         </head>
         <body>
@@ -150,14 +150,14 @@ function startDownloadServer() {
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f5f5f5;
             min-height: 100vh;
             padding: 20px;
           }
           .container {
             background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             padding: 30px;
             max-width: 800px;
             margin: 0 auto;
@@ -165,51 +165,51 @@ function startDownloadServer() {
           h1 {
             color: #333;
             margin-bottom: 10px;
-            font-size: 24px;
+            font-size: 20px;
           }
           .subtitle {
             color: #666;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             font-size: 14px;
           }
           .file-group {
-            margin-bottom: 25px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
           }
           .file-date {
             color: #333;
-            font-weight: 600;
-            margin-bottom: 15px;
-            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 10px;
+            font-size: 14px;
           }
           .file-buttons {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
           }
           .btn {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 12px 16px;
-            border-radius: 6px;
+            padding: 10px 14px;
+            border-radius: 4px;
             text-decoration: none;
             color: white;
-            font-weight: 500;
-            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 400;
+            font-size: 14px;
+            transition: background-color 0.2s;
           }
           .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            opacity: 0.9;
           }
           .btn-backup {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #2196F3;
           }
           .btn-rsc {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: #4CAF50;
           }
           .file-size {
             font-size: 12px;
@@ -329,7 +329,7 @@ function startDownloadServer() {
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: #f5f5f5;
               min-height: 100vh;
               display: flex;
               align-items: center;
@@ -338,28 +338,28 @@ function startDownloadServer() {
             }
             .container {
               background: white;
-              border-radius: 12px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-              padding: 40px;
+              border-radius: 4px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              padding: 30px;
               max-width: 400px;
               width: 100%;
             }
             h1 {
               color: #333;
               margin-bottom: 10px;
-              font-size: 24px;
+              font-size: 20px;
             }
             .subtitle {
               color: #666;
-              margin-bottom: 30px;
+              margin-bottom: 20px;
               font-size: 14px;
             }
             .error {
               background: #fee;
               color: #c33;
-              padding: 12px;
-              border-radius: 6px;
-              margin-bottom: 20px;
+              padding: 10px;
+              border-radius: 4px;
+              margin-bottom: 15px;
               font-size: 14px;
               display: ${errorMsg ? 'block' : 'none'};
             }
@@ -370,38 +370,33 @@ function startDownloadServer() {
             label {
               color: #333;
               margin-bottom: 8px;
-              font-weight: 500;
+              font-weight: 400;
               font-size: 14px;
             }
             input[type="password"] {
-              padding: 12px;
-              border: 2px solid #e0e0e0;
-              border-radius: 6px;
-              font-size: 16px;
-              transition: border-color 0.3s;
-              margin-bottom: 20px;
+              padding: 10px;
+              border: 1px solid #ddd;
+              border-radius: 4px;
+              font-size: 14px;
+              margin-bottom: 15px;
             }
             input[type="password"]:focus {
               outline: none;
-              border-color: #667eea;
+              border-color: #2196F3;
             }
             button {
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              background: #2196F3;
               color: white;
-              padding: 12px;
+              padding: 10px;
               border: none;
-              border-radius: 6px;
-              font-size: 16px;
-              font-weight: 600;
+              border-radius: 4px;
+              font-size: 14px;
+              font-weight: 400;
               cursor: pointer;
-              transition: transform 0.2s, box-shadow 0.2s;
+              transition: background-color 0.2s;
             }
             button:hover {
-              transform: translateY(-2px);
-              box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-            }
-            button:active {
-              transform: translateY(0);
+              background: #1976D2;
             }
           </style>
         </head>

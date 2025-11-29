@@ -84,7 +84,7 @@ async function createRouterToken(routerName, password) {
   
   // Create new token if doesn't exist
   const token = generateToken();
-  const tokenPassword = password || generatePassword();
+  const tokenPassword = password || 'mikrotikunnet';
   
   tokens[token] = {
     routerName,
