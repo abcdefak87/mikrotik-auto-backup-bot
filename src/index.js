@@ -761,7 +761,20 @@ async function sendBackupFilesList(chatId, routerName = null, page = 0) {
     files = await getBackupFilesByRouter(routerName, 100); // Get more to allow pagination
     title = `📁 **File Backup: ${routerName}**`;
   } else {
-    files = await getBackupFiles();
+    // For all routers, we need to map safe names back to original names
+    const routers = await getRouters();
+    const routerNameMap = new Map();
+    routers.forEach(r => {
+      const safe = r.name.replace(/[^a-zA-Z0-9-_]/g, '_');
+      routerNameMap.set(safe, r.name);
+    });
+    
+    const allFiles = await getBackupFiles();
+    // Map safe router names back to original names
+    files = allFiles.map(file => {
+      const originalName = routerNameMap.get(file.routerName) || file.routerName;
+      return { ...file, routerName: originalName };
+    });
     title = '📁 **File Backup: Semua Router**';
   }
   
