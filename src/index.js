@@ -72,10 +72,10 @@ const sendMainMenu = async (chatId) => {
     ],
     [
       {
-        text: '💾 Backup Semua Router',
+        text: '💾 Backup',
       },
       {
-        text: '📍 Backup Router Tertentu',
+        text: '⚙️ Setting Auto Backup',
       },
     ],
     [
@@ -301,6 +301,69 @@ async function sendRouterListMessage(chatId) {
     )
     .join('\n');
   await bot.sendMessage(chatId, `Daftar router:\n${lines}`);
+}
+
+async function sendBackupMenu(chatId) {
+  const keyboard = [
+    [
+      {
+        text: '💾 Backup Semua Router',
+      },
+    ],
+    [
+      {
+        text: '📍 Backup Router Tertentu',
+      },
+    ],
+    [
+      {
+        text: '⬅️ Kembali ke Menu',
+      },
+    ],
+  ];
+
+  await bot.sendMessage(chatId, 'Pilih opsi backup:', {
+    reply_markup: {
+      keyboard,
+      resize_keyboard: true,
+      one_time_keyboard: false,
+    },
+  });
+}
+
+async function sendAutoBackupSettings(chatId) {
+  const routers = await getRouters();
+  const isEnabled = scheduledJob !== null;
+  const nextRun = getNextRunTime();
+  
+  const statusText = isEnabled 
+    ? `✅ Aktif\nJadwal: ${config.backup.cronSchedule}\nTimezone: ${config.backup.timezone}\nBackup berikut: ${nextRun ? formatDate(nextRun) : 'Tidak diketahui'}`
+    : '❌ Nonaktif\nBelum ada jadwal backup otomatis yang diatur.';
+
+  const keyboard = [
+    [
+      {
+        text: isEnabled ? '⏸️ Nonaktifkan Auto Backup' : '▶️ Aktifkan Auto Backup',
+      },
+    ],
+    [
+      {
+        text: '⬅️ Kembali ke Menu',
+      },
+    ],
+  ];
+
+  await bot.sendMessage(
+    chatId,
+    `⚙️ Setting Auto Backup\n\n${statusText}\n\nTotal router: ${routers.length}`,
+    {
+      reply_markup: {
+        keyboard,
+        resize_keyboard: true,
+        one_time_keyboard: false,
+      },
+    }
+  );
 }
 
 async function sendRouterSelection(chatId, action, emptyMessage) {
@@ -679,11 +742,48 @@ bot.on('message', async (msg) => {
       case '📊 Status Backup':
         await sendStatusMessage(chatId);
         return;
+      case '💾 Backup':
+        await sendBackupMenu(chatId);
+        return;
+      case '⚙️ Setting Auto Backup':
+        await sendAutoBackupSettings(chatId);
+        return;
       case '💾 Backup Semua Router':
         await sendBackup(chatId, false);
         return;
       case '📍 Backup Router Tertentu':
         await sendRouterSelection(chatId, 'backup_router', 'Belum ada router untuk backup.');
+        return;
+      case '⬅️ Kembali ke Menu':
+        await sendMainMenu(chatId);
+        return;
+      case '▶️ Aktifkan Auto Backup':
+        if (!config.telegram.defaultChatId) {
+          await bot.sendMessage(
+            chatId,
+            '❌ Gagal: TELEGRAM_DEFAULT_CHAT_ID belum diatur. Silakan set di file .env terlebih dahulu.'
+          );
+          return;
+        }
+        // Stop existing job if any
+        if (scheduledJob) {
+          scheduledJob.stop();
+          scheduledJob = null;
+        }
+        // Start new scheduled job
+        scheduleJob();
+        await bot.sendMessage(chatId, '✅ Auto backup telah diaktifkan.');
+        await sendAutoBackupSettings(chatId);
+        return;
+      case '⏸️ Nonaktifkan Auto Backup':
+        if (scheduledJob) {
+          scheduledJob.stop();
+          scheduledJob = null;
+          await bot.sendMessage(chatId, '✅ Auto backup telah dinonaktifkan.');
+        } else {
+          await bot.sendMessage(chatId, 'ℹ️ Auto backup sudah dalam keadaan nonaktif.');
+        }
+        await sendAutoBackupSettings(chatId);
         return;
       case '📋 Daftar Router':
         await sendRouterListMessage(chatId);
