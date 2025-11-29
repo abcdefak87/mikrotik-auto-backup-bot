@@ -437,6 +437,58 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       console.error('Failed to send backup summary:', err.message || err);
     }
   }
+
+  // Send notification to group if configured
+  await sendBackupNotificationToGroup(summary, triggeredBySchedule);
+}
+
+// Send backup notification to group
+async function sendBackupNotificationToGroup(summary, triggeredBySchedule = false) {
+  if (!config.telegram.groupChatId) {
+    return; // Group chat ID not configured, skip
+  }
+
+  const successCount = summary.filter((s) => s.success).length;
+  const failedCount = summary.length - successCount;
+  const timestamp = lastBackupMeta?.successAt || new Date();
+  const timeStr = formatDate(timestamp, config.backup.timezone);
+
+  // Build router status list
+  const routerStatusList = summary.map((r) => {
+    if (r.success) {
+      return `  ✅ ${formatHtml(r.name)}`;
+    } else {
+      const errorMsg = sanitizeError(r.error || 'Tidak diketahui');
+      return `  ❌ ${formatHtml(r.name)}: ${formatHtml(errorMsg)}`;
+    }
+  }).join('\n');
+
+  // Build notification message
+  const triggerType = triggeredBySchedule ? '⏰ Backup Terjadwal' : '💾 Backup Manual';
+  const statusIcon = failedCount === 0 ? '✅' : failedCount === summary.length ? '❌' : '⚠️';
+  
+  const message = [
+    `${statusIcon} <b>${triggerType} Selesai</b>`,
+    '',
+    `🕐 <b>Waktu:</b> ${formatHtml(timeStr)}`,
+    `📦 <b>Total Router:</b> ${summary.length}`,
+    `✅ <b>Berhasil:</b> ${successCount}`,
+    failedCount > 0 ? `❌ <b>Gagal:</b> ${failedCount}` : '',
+    '',
+    `<b>📋 Detail Router:</b>`,
+    routerStatusList,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  try {
+    await bot.sendMessage(config.telegram.groupChatId, message, { parse_mode: 'HTML' });
+  } catch (err) {
+    // Silently fail if network is down (to avoid spam)
+    if (!isNetworkError(err)) {
+      console.error('Failed to send backup notification to group:', err.message || err);
+    }
+  }
 }
 
 // Validate timezone

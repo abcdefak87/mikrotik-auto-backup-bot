@@ -19,6 +19,7 @@ module.exports = {
     token: process.env.TELEGRAM_BOT_TOKEN || '',
     allowedChatIds: parseChatIds(process.env.TELEGRAM_ALLOWED_CHAT_IDS),
     defaultChatId: process.env.TELEGRAM_DEFAULT_CHAT_ID || null,
+    groupChatId: process.env.TELEGRAM_GROUP_CHAT_ID || null,
   },
   backup: {
     directory: path.join(
