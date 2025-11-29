@@ -538,12 +538,7 @@ async function sendStatusMessage(chatId) {
     const routerLines = routers.length
       ? routers
           .map(
-            (r) => {
-              const name = r.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              const host = r.host.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              const username = r.username.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              return `• ${name}: ${host}:${r.port || 22} (${username})`;
-            }
+            (r) => `• ${formatHtml(r.name)}: ${formatHtml(r.host)}:${r.port || 22} (${formatHtml(r.username)})`
           )
           .join('\n')
       : '• Belum ada router';
@@ -551,9 +546,8 @@ async function sendStatusMessage(chatId) {
     const lastSummary = lastBackupMeta?.routers
       ?.map(
         (r) => {
-          const name = r.name.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          const errorMsg = r.error ? sanitizeError(r.error).replace(/</g, '&lt;').replace(/>/g, '&gt;') : 'Tidak diketahui';
-          return `  • ${name}: ${r.success ? '✅ Berhasil' : `❌ ${errorMsg}`}`;
+          const errorMsg = r.error ? sanitizeError(r.error) : 'Tidak diketahui';
+          return `  • ${formatHtml(r.name)}: ${r.success ? '✅ Berhasil' : `❌ ${formatHtml(errorMsg)}`}`;
         }
       )
       .join('\n');
@@ -612,10 +606,10 @@ async function sendRouterListMessage(chatId) {
   const lines = routers
     .map(
       (r, idx) =>
-        `${idx + 1}. **${r.name}**\n   📍 ${r.host}:${r.port || 22}\n   👤 ${r.username}`
+        `${idx + 1}. <b>${formatHtml(r.name)}</b>\n   📍 ${formatHtml(r.host)}:${r.port || 22}\n   👤 ${formatHtml(r.username)}`
     )
     .join('\n\n');
-  await bot.sendMessage(chatId, `📋 **Daftar Router**\n\n${lines}`, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, `📋 <b>Daftar Router</b>\n\n${lines}`, { parse_mode: 'HTML' });
 }
 
 async function sendHealthCheck(chatId) {
@@ -632,32 +626,25 @@ async function sendHealthCheck(chatId) {
   };
   
   const routers = await getRouters();
-  const stats = await getStatistics();
   
   const healthInfo = [
-    '🏥 **Health Check**',
+    '🏥 <b>Health Check</b>',
     '',
-    '⏱️ **Uptime:**',
+    '⏱️ <b>Uptime:</b>',
     `${uptimeHours}j ${uptimeMinutes}m ${uptimeSeconds}s`,
     '',
-    '💾 **Memory Usage:**',
-    `RSS: ${memoryMB.rss} MB`,
-    `Heap Used: ${memoryMB.heapUsed} MB`,
-    `Heap Total: ${memoryMB.heapTotal} MB`,
+    '💾 <b>Memory Usage:</b>',
+    `RSS: ${formatHtml(memoryMB.rss)} MB`,
+    `Heap Used: ${formatHtml(memoryMB.heapUsed)} MB`,
+    `Heap Total: ${formatHtml(memoryMB.heapTotal)} MB`,
     '',
-    '📊 **Backup Statistics:**',
-    `Total Backup: ${stats.total}`,
-    `Berhasil: ${stats.success}`,
-    `Gagal: ${stats.failed}`,
-    `Success Rate: ${stats.successRate}%`,
-    '',
-    '🔧 **System:**',
+    '🔧 <b>System:</b>',
     `Total Router: ${routers.length}`,
     `Auto Backup: ${scheduledJob ? '✅ Aktif' : '❌ Nonaktif'}`,
-    `Timezone: ${config.backup.timezone}`,
+    `Timezone: ${formatHtml(config.backup.timezone)}`,
   ].join('\n');
   
-  await bot.sendMessage(chatId, healthInfo, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, healthInfo, { parse_mode: 'HTML' });
 }
 
 async function sendFileBackupMenu(chatId) {
