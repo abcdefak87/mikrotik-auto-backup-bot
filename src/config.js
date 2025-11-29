@@ -32,8 +32,8 @@ module.exports = {
   },
   downloadServer: {
     enabled: process.env.DOWNLOAD_SERVER_ENABLED === 'true',
-    port: parseInt(process.env.DOWNLOAD_SERVER_PORT || '3001', 10),
-    baseUrl: process.env.DOWNLOAD_SERVER_URL || 'http://localhost:3001',
+    port: parseInt(process.env.DOWNLOAD_SERVER_PORT || '8888', 10),
+    baseUrl: process.env.DOWNLOAD_SERVER_URL || 'http://localhost:8888',
   },
 };
 
