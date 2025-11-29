@@ -1333,6 +1333,34 @@ bot.onText(/\/status\b/, async (msg) => {
   await sendStatusMessage(chatId);
 });
 
+bot.onText(/\/get_chat_id\b/, async (msg) => {
+  const chatId = msg.chat.id;
+  if (!ensureChatAllowed(chatId)) return;
+  
+  const chatInfo = msg.chat;
+  const chatIdStr = String(chatId);
+  const chatType = chatInfo.type === 'group' || chatInfo.type === 'supergroup' ? 'Group' : 'Private Chat';
+  const chatTitle = chatInfo.title || chatInfo.first_name || 'N/A';
+  
+  const message = [
+    `📋 <b>Chat ID Information</b>`,
+    '',
+    `💬 <b>Tipe:</b> ${formatHtml(chatType)}`,
+    `📝 <b>Nama:</b> ${formatHtml(chatTitle)}`,
+    `🆔 <b>Chat ID:</b> <code>${formatHtml(chatIdStr)}</code>`,
+    '',
+    chatType === 'Group' 
+      ? `✅ Gunakan Chat ID ini untuk <code>TELEGRAM_GROUP_CHAT_ID</code> di file .env`
+      : `ℹ️ Untuk mendapatkan Group Chat ID, tambahkan bot ke group dan kirim command ini di group tersebut.`,
+  ].join('\n');
+  
+  try {
+    await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+  } catch (err) {
+    console.error('Failed to send chat ID info:', err.message || err);
+  }
+});
+
 bot.onText(/\/backup_now\b/, async (msg) => {
   const chatId = msg.chat.id;
   if (!ensureChatAllowed(chatId)) return;
