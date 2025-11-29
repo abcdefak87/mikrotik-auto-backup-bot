@@ -24,6 +24,9 @@ function startDownloadServer() {
   // Parse form data
   app.use(express.urlencoded({ extended: true }));
   
+  // Parse JSON (if needed)
+  app.use(express.json());
+  
   // Helper function to render file list page
   async function renderFileListPage(token, pass, tokenData, files) {
     if (files.length === 0) {
@@ -239,11 +242,13 @@ function startDownloadServer() {
         // Get all backup files for this router
         const files = await getBackupFilesByRouter(tokenData.routerName, 100);
         const html = renderFileListPage(token, pass, tokenData, files);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(html);
       }
       
       // If no token, show error
       if (!token) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(`
           <!DOCTYPE html>
           <html>
@@ -267,6 +272,7 @@ function startDownloadServer() {
       const tokenData = await verifyTokenOnly(token);
       
       if (!tokenData) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(403).send(`
           <!DOCTYPE html>
           <html>
@@ -288,6 +294,7 @@ function startDownloadServer() {
       
       // Show password form
       const errorMsg = req.query.error ? decodeURIComponent(req.query.error) : '';
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(`
         <!DOCTYPE html>
         <html>
@@ -392,7 +399,8 @@ function startDownloadServer() {
       `);
       
     } catch (err) {
-      res.status(500).send(`
+      console.error('Error in GET /download:', err);
+      res.status(500).setHeader('Content-Type', 'text/html; charset=utf-8').send(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -406,6 +414,7 @@ function startDownloadServer() {
         <body>
           <h1 class="error">❌ Error</h1>
           <p>Terjadi kesalahan saat memproses permintaan.</p>
+          <p style="font-size: 12px; color: #999;">${err.message || 'Unknown error'}</p>
         </body>
         </html>
       `);
@@ -417,6 +426,8 @@ function startDownloadServer() {
     try {
       const { token, pass } = req.body;
       
+      console.log('POST /download - token:', token ? 'present' : 'missing', 'pass:', pass ? 'present' : 'missing');
+      
       if (!token || !pass) {
         return res.redirect(`/download?token=${token || ''}&error=${encodeURIComponent('Password diperlukan')}`);
       }
@@ -424,16 +435,23 @@ function startDownloadServer() {
       const tokenData = await verifyToken(token, pass);
       
       if (!tokenData) {
+        console.log('POST /download - Invalid token or password');
         return res.redirect(`/download?token=${token}&error=${encodeURIComponent('Password salah atau token tidak valid')}`);
       }
       
+      console.log('POST /download - Token valid, router:', tokenData.routerName);
+      
       // Get all backup files for this router
       const files = await getBackupFilesByRouter(tokenData.routerName, 100);
+      console.log('POST /download - Found files:', files.length);
+      
       const html = renderFileListPage(token, pass, tokenData, files);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(html);
       
     } catch (err) {
-      res.status(500).send(`
+      console.error('Error in POST /download:', err);
+      res.status(500).setHeader('Content-Type', 'text/html; charset=utf-8').send(`
         <!DOCTYPE html>
         <html>
         <head>
@@ -447,6 +465,7 @@ function startDownloadServer() {
         <body>
           <h1 class="error">❌ Error</h1>
           <p>Terjadi kesalahan saat memproses permintaan.</p>
+          <p style="font-size: 12px; color: #999;">${err.message || 'Unknown error'}</p>
         </body>
         </html>
       `);
@@ -577,6 +596,52 @@ function startDownloadServer() {
   // Health check endpoint
   app.get('/health', (req, res) => {
     res.json({ status: 'ok' });
+  });
+  
+  // 404 handler
+  app.use((req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(404).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>404 - Not Found</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+          .error { color: #d32f2f; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">❌ 404 - Halaman tidak ditemukan</h1>
+        <p>Endpoint yang diminta tidak tersedia.</p>
+      </body>
+      </html>
+    `);
+  });
+  
+  // Global error handler
+  app.use((err, req, res, next) => {
+    console.error('Unhandled error:', err);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Server Error</title>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+          .error { color: #d32f2f; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">❌ Server Error</h1>
+        <p>Terjadi kesalahan pada server.</p>
+        <p style="font-size: 12px; color: #999;">${err.message || 'Unknown error'}</p>
+      </body>
+      </html>
+    `);
   });
   
   const port = config.downloadServer.port || 8888;
