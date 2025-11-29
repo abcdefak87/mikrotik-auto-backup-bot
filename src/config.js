@@ -30,5 +30,10 @@ module.exports = {
     cronSchedule: process.env.BACKUP_CRON_SCHEDULE || '0 18 * * *',
     timezone: process.env.ROUTER_TIMEZONE || 'Asia/Jakarta',
   },
+  downloadServer: {
+    enabled: process.env.DOWNLOAD_SERVER_ENABLED === 'true',
+    port: parseInt(process.env.DOWNLOAD_SERVER_PORT || '3001', 10),
+    baseUrl: process.env.DOWNLOAD_SERVER_URL || 'http://localhost:3001',
+  },
 };
 

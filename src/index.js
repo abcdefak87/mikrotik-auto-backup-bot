@@ -17,6 +17,8 @@ const {
   deleteBackupPair,
   formatFileSize,
 } = require('./services/backupFiles');
+const { createToken } = require('./services/downloadTokens');
+const { startDownloadServer } = require('./services/downloadServer');
 
 if (!config.telegram.token) {
   logger.error('Missing TELEGRAM_BOT_TOKEN. Set it in telegram-bot/.env before running.');
@@ -375,6 +377,10 @@ async function sendBackup(chatId, triggeredBySchedule = false, routerName) {
       summary.push({
         name: router.name.trim(), // Ensure trimmed name
         success: true,
+        backupPath: result.backupPath,
+        exportPath: result.exportPath,
+        backupFileName: path.basename(result.backupPath),
+        exportFileName: path.basename(result.exportPath),
       });
     } catch (err) {
       const sanitizedError = sanitizeError(err);
@@ -474,15 +480,38 @@ async function sendBackupNotificationToGroup(summary, triggeredBySchedule = fals
   const timestamp = lastBackupMeta?.successAt || new Date();
   const timeStr = formatDate(timestamp, config.backup.timezone);
 
-  // Build router status list
-  const routerStatusList = summary.map((r) => {
+  // Build router status list with download links
+  const routerStatusList = [];
+  const downloadLinks = [];
+  
+  for (const r of summary) {
     if (r.success) {
-      return `  ✅ ${formatHtml(r.name)}`;
+      routerStatusList.push(`  ✅ ${formatHtml(r.name)}`);
+      
+      // Generate download links if download server is enabled
+      if (config.downloadServer.enabled && r.backupPath && r.exportPath) {
+        try {
+          const backupToken = await createToken(r.backupPath, r.backupFileName, r.name);
+          const exportToken = await createToken(r.exportPath, r.exportFileName, r.name);
+          
+          const backupUrl = `${config.downloadServer.baseUrl}/download?token=${backupToken.token}&pass=${backupToken.password}`;
+          const exportUrl = `${config.downloadServer.baseUrl}/download?token=${exportToken.token}&pass=${exportToken.password}`;
+          
+          downloadLinks.push(
+            `\n📡 <b>${formatHtml(r.name)}:</b>`,
+            `  • <a href="${backupUrl}">Download Backup (.backup)</a>`,
+            `  • <a href="${exportUrl}">Download Export (.rsc)</a>`,
+            `  🔑 Password: <code>${backupToken.password}</code>`
+          );
+        } catch (err) {
+          logger.error(`Failed to create download token for ${r.name}`, err);
+        }
+      }
     } else {
       const errorMsg = sanitizeError(r.error || 'Tidak diketahui');
-      return `  ❌ ${formatHtml(r.name)}: ${formatHtml(errorMsg)}`;
+      routerStatusList.push(`  ❌ ${formatHtml(r.name)}: ${formatHtml(errorMsg)}`);
     }
-  }).join('\n');
+  }
 
   // Build notification message
   const triggerType = triggeredBySchedule ? '⏰ Backup Terjadwal' : '💾 Backup Manual';
@@ -497,13 +526,19 @@ async function sendBackupNotificationToGroup(summary, triggeredBySchedule = fals
     failedCount > 0 ? `❌ <b>Gagal:</b> ${failedCount}` : '',
     '',
     `<b>📋 Detail Router:</b>`,
-    routerStatusList,
+    routerStatusList.join('\n'),
+    downloadLinks.length > 0 ? '\n<b>🔗 Download Link:</b>' : '',
+    ...downloadLinks,
+    downloadLinks.length > 0 ? '\n⏰ Link berlaku 24 jam' : '',
   ]
     .filter(Boolean)
     .join('\n');
 
   try {
-    await bot.sendMessage(config.telegram.groupChatId, message, { parse_mode: 'HTML' });
+    await bot.sendMessage(config.telegram.groupChatId, message, { 
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
   } catch (err) {
     // Silently fail if network is down (to avoid spam)
     if (!isNetworkError(err)) {
@@ -1863,6 +1898,14 @@ bot.on('error', (err) => {
 });
 
 fs.ensureDirSync(config.backup.directory);
+
+// Start download server if enabled
+if (config.downloadServer.enabled) {
+  startDownloadServer();
+  logger.info(`Download server enabled on port ${config.downloadServer.port}`);
+} else {
+  logger.info('Download server disabled');
+}
 
 // Load custom schedule on startup
 loadCustomSchedule().then(async () => {
