@@ -103,15 +103,52 @@ function startDownloadServer() {
       return b.timestamp.localeCompare(a.timestamp);
     });
     
-    // Format date for display
+    // Format date for display (24 jam, WIB Jakarta)
     function formatDate(timestamp) {
-      const year = timestamp.substring(0, 4);
-      const month = timestamp.substring(4, 6);
-      const day = timestamp.substring(6, 8);
-      const hour = timestamp.substring(9, 11);
-      const minute = timestamp.substring(11, 13);
-      const second = timestamp.substring(13, 15);
-      return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+      try {
+        // Parse timestamp string: yyyyMMdd_HHmmss
+        // Timestamp dibuat dari waktu lokal server, jadi parse sebagai waktu lokal
+        const year = parseInt(timestamp.substring(0, 4), 10);
+        const month = parseInt(timestamp.substring(4, 6), 10) - 1; // Month is 0-indexed
+        const day = parseInt(timestamp.substring(6, 8), 10);
+        const hour = parseInt(timestamp.substring(9, 11), 10);
+        const minute = parseInt(timestamp.substring(11, 13), 10);
+        const second = parseInt(timestamp.substring(13, 15), 10);
+        
+        // Create Date object (as local time, since timestamp is from local time)
+        const date = new Date(year, month, day, hour, minute, second);
+        
+        // Format with Jakarta timezone (WIB) in 24 hour format
+        const formatter = new Intl.DateTimeFormat('id-ID', {
+          timeZone: 'Asia/Jakarta',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false, // 24 jam format
+        });
+        
+        const parts = formatter.formatToParts(date);
+        const dayPart = parts.find(p => p.type === 'day').value;
+        const monthPart = parts.find(p => p.type === 'month').value;
+        const yearPart = parts.find(p => p.type === 'year').value;
+        const hourPart = parts.find(p => p.type === 'hour').value;
+        const minutePart = parts.find(p => p.type === 'minute').value;
+        const secondPart = parts.find(p => p.type === 'second').value;
+        
+        return `${dayPart}/${monthPart}/${yearPart} ${hourPart}:${minutePart}:${secondPart}`;
+      } catch (err) {
+        // Fallback to simple format if error
+        const year = timestamp.substring(0, 4);
+        const month = timestamp.substring(4, 6);
+        const day = timestamp.substring(6, 8);
+        const hour = timestamp.substring(9, 11);
+        const minute = timestamp.substring(11, 13);
+        const second = timestamp.substring(13, 15);
+        return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+      }
     }
     
     // Build file list HTML
