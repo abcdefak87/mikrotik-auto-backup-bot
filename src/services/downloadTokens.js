@@ -73,9 +73,10 @@ async function createRouterToken(routerName, password) {
   for (const [token, data] of Object.entries(tokens)) {
     if (data.routerName === routerName && !data.expiresAt) {
       existingToken = token;
-      // Update password if provided
-      if (password) {
-        tokens[token].password = password;
+      // Update password if provided, or use default if not provided
+      const newPassword = password || 'mikrotikunnet';
+      if (tokens[token].password !== newPassword) {
+        tokens[token].password = newPassword;
         await saveTokens(tokens);
       }
       return { token: existingToken, password: tokens[token].password };
@@ -149,6 +150,29 @@ async function verifyTokenOnly(token) {
   
   return tokenData;
 }
+
+// Update all existing tokens to use default password
+async function updateAllTokensToDefaultPassword() {
+  const tokens = await getTokens();
+  let updated = false;
+  const defaultPassword = 'mikrotikunnet';
+  
+  for (const [token, data] of Object.entries(tokens)) {
+    if (data.password !== defaultPassword && !data.expiresAt) {
+      tokens[token].password = defaultPassword;
+      updated = true;
+    }
+  }
+  
+  if (updated) {
+    await saveTokens(tokens);
+  }
+}
+
+// Update all tokens to default password on startup
+updateAllTokensToDefaultPassword().catch(err => {
+  // Silently fail
+});
 
 // Cleanup expired tokens periodically (every hour)
 setInterval(() => {
