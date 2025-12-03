@@ -18,9 +18,14 @@ try {
   const content = fs.readFileSync(filePath, 'utf8');
   const errors = [];
 
-  // Check for ES6 modules
-  if (/^import\s+.*from|^export\s+/.test(content)) {
-    errors.push('⚠️  ES6 modules detected! Use CommonJS (require/module.exports)');
+  // Check for ES6 modules (check all lines, not just start)
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^import\s+.*from|^export\s+/.test(trimmed)) {
+      errors.push('⚠️  ES6 modules detected! Use CommonJS (require/module.exports)');
+      break;
+    }
   }
 
   // Check for hardcoded passwords (simple pattern)
