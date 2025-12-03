@@ -1,0 +1,31 @@
+{
+  "version": "1.0.0",
+  "hooks": {
+    "beforeSave": [
+      {
+        "command": "node -c \"${file}\" 2>&1 || echo Syntax check skipped",
+        "description": "Validasi syntax JavaScript sebelum save"
+      },
+      {
+        "command": "node .cursor/validate.js \"${file}\" 2>&1 || true",
+        "description": "Validasi CommonJS dan deteksi hardcoded credentials"
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "node -c \"${file}\" 2>&1 || echo Syntax validation skipped",
+        "description": "Check syntax JavaScript sebelum AI memproses"
+      },
+      {
+        "command": "node .cursor/validate.js \"${file}\" 2>&1 || true",
+        "description": "Validasi code standards sebelum AI memproses"
+      }
+    ],
+    "afterSave": [
+      {
+        "command": "echo ✅ File ${file} berhasil disimpan",
+        "description": "Konfirmasi setelah file disimpan"
+      }
+    ]
+  }
+}

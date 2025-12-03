@@ -1,0 +1,13 @@
+{
+  "json.schemaDownload.enable": true,
+  "json.schemas": [
+    {
+      "fileMatch": [
+        "**/.cursor/hooks.json",
+        ".cursor/hooks.json"
+      ],
+      "url": "https://unpkg.com/cursor-hooks/schema/hooks.schema.json"
+    }
+  ]
+}
+
