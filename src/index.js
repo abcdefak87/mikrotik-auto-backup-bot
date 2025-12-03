@@ -20,6 +20,29 @@ const {
 const { createRouterToken } = require('./services/downloadTokens');
 const { startDownloadServer } = require('./services/downloadServer');
 
+// Logging helper functions - must be defined before use
+const logger = {
+  error: (message, error = null) => {
+    const timestamp = new Date().toISOString();
+    if (error) {
+      console.error(`[${timestamp}] ERROR: ${message}`, error.message || error);
+      if (error.stack && process.env.NODE_ENV !== 'production') {
+        console.error(error.stack);
+      }
+    } else {
+      console.error(`[${timestamp}] ERROR: ${message}`);
+    }
+  },
+  warn: (message) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[${timestamp}] WARN: ${message}`);
+  },
+  info: (message) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] INFO: ${message}`);
+  }
+};
+
 if (!config.telegram.token) {
   logger.error('Missing TELEGRAM_BOT_TOKEN. Set it in telegram-bot/.env before running.');
   process.exit(1);
@@ -82,29 +105,6 @@ function sanitizeError(error) {
   // Remove password patterns from error messages
   return errorStr.replace(/password[=:]\s*['"]?[^'"]*['"]?/gi, 'password=***');
 }
-
-// Logging helper functions
-const logger = {
-  error: (message, error = null) => {
-    const timestamp = new Date().toISOString();
-    if (error) {
-      console.error(`[${timestamp}] ERROR: ${message}`, error.message || error);
-      if (error.stack && process.env.NODE_ENV !== 'production') {
-        console.error(error.stack);
-      }
-    } else {
-      console.error(`[${timestamp}] ERROR: ${message}`);
-    }
-  },
-  warn: (message) => {
-    const timestamp = new Date().toISOString();
-    console.warn(`[${timestamp}] WARN: ${message}`);
-  },
-  info: (message) => {
-    const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] INFO: ${message}`);
-  }
-};
 
 // Helper function to detect network errors
 function isNetworkError(err) {
@@ -1537,7 +1537,7 @@ bot.on('callback_query', async (query) => {
     } catch (err) {
       // Ignore expired query errors silently
       if (err.code !== 'ETELEGRAM' || !err.message.includes('query is too old')) {
-        console.warn('Error answering callback query:', err.message);
+        logger.warn(`Error answering callback query: ${err.message}`);
       }
     }
   } else {
@@ -1737,7 +1737,7 @@ bot.on('callback_query', async (query) => {
         } catch (err) {
           // Ignore expired query errors
           if (err.code !== 'ETELEGRAM' || !err.message.includes('query is too old')) {
-            console.warn('Error answering callback query:', err.message);
+            logger.warn(`Error answering callback query: ${err.message}`);
           }
         }
       }
