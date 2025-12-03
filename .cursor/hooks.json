@@ -30,6 +30,18 @@
         "command": "echo ✅ File ${file} berhasil disimpan",
         "description": "Konfirmasi setelah file disimpan"
       }
+    ],
+    "beforeWriteFile": [
+      {
+        "command": "node .cursor/security-check.js \"${file}\" write 2>&1 || true",
+        "description": "Security check - peringatan jika menulis file sensitif"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "node .cursor/security-check.js \"${file}\" read 2>&1 || true",
+        "description": "Security check - peringatan jika membaca file sensitif"
+      }
     ]
   }
 }
