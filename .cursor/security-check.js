@@ -24,8 +24,10 @@ const sensitiveFiles = [
 const fileRelative = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
 
 // Check if file is sensitive
+let isSensitive = false;
 for (const sensitive of sensitiveFiles) {
   if (fileRelative.includes(sensitive) || fileRelative.endsWith(sensitive)) {
+    isSensitive = true;
     if (hookType === 'write') {
       console.warn(`⚠️  WARNING: Attempting to write sensitive file: ${fileRelative}`);
       console.warn('   Make sure this is intentional and file is in .gitignore');
@@ -36,6 +38,11 @@ for (const sensitive of sensitiveFiles) {
     // Don't block, just warn
     process.exit(0);
   }
+}
+
+// If not sensitive, show info (optional, can be removed if too verbose)
+if (!isSensitive && filePath.endsWith('.js')) {
+  console.log(`✅ Security check: ${fileRelative} is safe`);
 }
 
 process.exit(0);

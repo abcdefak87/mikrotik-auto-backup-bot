@@ -3,7 +3,7 @@
   "hooks": {
     "afterFileEdit": [
       {
-        "command": "node -c \"${file}\"",
+        "command": "node -c \"${file}\" && echo ✅ Syntax check passed",
         "description": "Validasi syntax JavaScript setelah file di-edit"
       },
       {
@@ -13,7 +13,7 @@
     ],
     "beforeSubmitPrompt": [
       {
-        "command": "node -c \"${file}\"",
+        "command": "node -c \"${file}\" && echo ✅ Syntax check passed",
         "description": "Check syntax JavaScript sebelum AI memproses"
       },
       {

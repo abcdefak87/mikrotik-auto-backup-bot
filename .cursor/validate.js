@@ -41,8 +41,11 @@ try {
   }
 
   if (errors.length > 0) {
+    console.error('🔍 Validation Results:');
     console.error(errors.join('\n'));
     process.exit(1);
+  } else {
+    console.log('✅ Validation passed: No ES6 modules or hardcoded credentials detected');
   }
 } catch (err) {
   // Ignore errors, just validate syntax

@@ -101,6 +101,8 @@ try {
   if (warnings.length > 0) {
     console.warn('🐛 Debug Warnings:');
     warnings.forEach(w => console.warn(`  ${w}`));
+  } else {
+    console.log('✅ Debug check passed: No issues detected');
   }
 
   // Output errors (blocking)
