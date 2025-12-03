@@ -1,14 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": 1,
   "hooks": {
-    "beforeSave": [
+    "afterFileEdit": [
       {
         "command": "node -c \"${file}\" 2>&1 || echo Syntax check skipped",
-        "description": "Validasi syntax JavaScript sebelum save"
+        "description": "Validasi syntax JavaScript setelah file di-edit"
       },
       {
         "command": "node .cursor/validate.js \"${file}\" 2>&1 || true",
         "description": "Validasi CommonJS dan deteksi hardcoded credentials"
+      },
+      {
+        "command": "echo ✅ File ${file} berhasil disimpan",
+        "description": "Konfirmasi setelah file disimpan"
       }
     ],
     "beforeSubmitPrompt": [
@@ -23,18 +27,6 @@
       {
         "command": "node .cursor/debug.js \"${file}\" 2>&1 || true",
         "description": "Debug check - deteksi common bugs dan potential issues"
-      }
-    ],
-    "afterSave": [
-      {
-        "command": "echo ✅ File ${file} berhasil disimpan",
-        "description": "Konfirmasi setelah file disimpan"
-      }
-    ],
-    "beforeWriteFile": [
-      {
-        "command": "node .cursor/security-check.js \"${file}\" write 2>&1 || true",
-        "description": "Security check - peringatan jika menulis file sensitif"
       }
     ],
     "beforeReadFile": [
