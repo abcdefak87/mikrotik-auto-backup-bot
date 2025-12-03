@@ -3,35 +3,31 @@
   "hooks": {
     "afterFileEdit": [
       {
-        "command": "node -c \"${file}\" 2>&1 || echo Syntax check skipped",
+        "command": "node -c \"${file}\"",
         "description": "Validasi syntax JavaScript setelah file di-edit"
       },
       {
-        "command": "node .cursor/validate.js \"${file}\" 2>&1 || true",
+        "command": "node .cursor/validate.js \"${file}\"",
         "description": "Validasi CommonJS dan deteksi hardcoded credentials"
-      },
-      {
-        "command": "echo ✅ File ${file} berhasil disimpan",
-        "description": "Konfirmasi setelah file disimpan"
       }
     ],
     "beforeSubmitPrompt": [
       {
-        "command": "node -c \"${file}\" 2>&1 || echo Syntax validation skipped",
+        "command": "node -c \"${file}\"",
         "description": "Check syntax JavaScript sebelum AI memproses"
       },
       {
-        "command": "node .cursor/validate.js \"${file}\" 2>&1 || true",
+        "command": "node .cursor/validate.js \"${file}\"",
         "description": "Validasi code standards sebelum AI memproses"
       },
       {
-        "command": "node .cursor/debug.js \"${file}\" 2>&1 || true",
+        "command": "node .cursor/debug.js \"${file}\"",
         "description": "Debug check - deteksi common bugs dan potential issues"
       }
     ],
     "beforeReadFile": [
       {
-        "command": "node .cursor/security-check.js \"${file}\" read 2>&1 || true",
+        "command": "node .cursor/security-check.js \"${file}\" read",
         "description": "Security check - peringatan jika membaca file sensitif"
       }
     ]
