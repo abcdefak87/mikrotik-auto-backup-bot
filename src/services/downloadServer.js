@@ -5,6 +5,37 @@ const { verifyToken, verifyTokenOnly } = require('./downloadTokens');
 const { getBackupFilesByRouter, formatFileSize } = require('./backupFiles');
 const config = require('../config');
 
+// Sanitize password from error messages (same as index.js)
+function sanitizeError(error) {
+  if (!error) return error;
+  const errorStr = error.toString();
+  // Remove password patterns from error messages
+  return errorStr.replace(/password[=:]\s*['"]?[^'"]*['"]?/gi, 'password=***');
+}
+
+// Logging helper functions (same pattern as index.js)
+const logger = {
+  error: (message, error = null) => {
+    const timestamp = new Date().toISOString();
+    if (error) {
+      console.error(`[${timestamp}] ERROR: ${message}`, error.message || error);
+      if (error.stack && process.env.NODE_ENV !== 'production') {
+        console.error(error.stack);
+      }
+    } else {
+      console.error(`[${timestamp}] ERROR: ${message}`);
+    }
+  },
+  warn: (message) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[${timestamp}] WARN: ${message}`);
+  },
+  info: (message) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] INFO: ${message}`);
+  }
+};
+
 let server = null;
 
 function startDownloadServer() {
@@ -277,36 +308,36 @@ function startDownloadServer() {
   // Or file list page (GET /download?token=xxx&pass=xxx with password)
   app.get('/download', async (req, res) => {
     try {
-      console.log('[GET /download] Request received');
+      logger.info('[GET /download] Request received');
       const { token, pass } = req.query;
-      console.log('[GET /download] token:', token ? 'present' : 'missing', 'pass:', pass ? 'present' : 'missing');
+      logger.info(`[GET /download] token: ${token ? 'present' : 'missing'}, pass: ${pass ? 'present' : 'missing'}`);
       
       // If password provided in query, show file list
       if (token && pass) {
-        console.log('[GET /download] Verifying token with password');
+        logger.info('[GET /download] Verifying token with password');
         const tokenData = await verifyToken(token, pass);
         
         if (!tokenData) {
-          console.log('[GET /download] Invalid token or password');
+          logger.warn('[GET /download] Invalid token or password');
           return res.redirect(`/download?token=${token}&error=${encodeURIComponent('Password salah atau token tidak valid')}`);
         }
         
-        console.log('[GET /download] Token valid, router:', tokenData.routerName);
+        logger.info(`[GET /download] Token valid, router: ${tokenData.routerName}`);
         
         // Get all backup files for this router
-        console.log('[GET /download] Getting backup files for router:', tokenData.routerName);
+        logger.info(`[GET /download] Getting backup files for router: ${tokenData.routerName}`);
         const files = await getBackupFilesByRouter(tokenData.routerName, 100);
-        console.log('[GET /download] Found files:', files.length);
+        logger.info(`[GET /download] Found files: ${files.length}`);
         
         const html = renderFileListPage(token, pass, tokenData, files);
-        console.log('[GET /download] HTML generated, length:', html.length);
+        logger.info(`[GET /download] HTML generated, length: ${html.length}`);
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.send(html);
       }
       
       // If no token, show error
       if (!token) {
-        console.log('[GET /download] No token provided');
+        logger.warn('[GET /download] No token provided');
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         return res.status(400).send(`
           <!DOCTYPE html>
@@ -352,7 +383,7 @@ function startDownloadServer() {
       }
       
       // Show password form
-      console.log('[GET /download] Showing password form for router:', tokenData.routerName);
+      logger.info(`[GET /download] Showing password form for router: ${tokenData.routerName}`);
       const errorMsg = req.query.error ? decodeURIComponent(req.query.error) : '';
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(`
@@ -454,7 +485,8 @@ function startDownloadServer() {
       `);
       
     } catch (err) {
-      console.error('Error in GET /download:', err);
+      logger.error('Error in GET /download', err);
+      const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
       res.status(500).setHeader('Content-Type', 'text/html; charset=utf-8').send(`
         <!DOCTYPE html>
         <html>
@@ -469,7 +501,7 @@ function startDownloadServer() {
         <body>
           <h1 class="error">❌ Error</h1>
           <p>Terjadi kesalahan saat memproses permintaan.</p>
-          <p style="font-size: 12px; color: #999;">${err.message || 'Unknown error'}</p>
+          <p style="font-size: 12px; color: #999;">${escapeHtml(sanitizedMsg)}</p>
         </body>
         </html>
       `);
@@ -481,7 +513,7 @@ function startDownloadServer() {
     try {
       const { token, pass } = req.body;
       
-      console.log('POST /download - token:', token ? 'present' : 'missing', 'pass:', pass ? 'present' : 'missing');
+      logger.info(`POST /download - token: ${token ? 'present' : 'missing'}, pass: ${pass ? 'present' : 'missing'}`);
       
       if (!token || !pass) {
         return res.redirect(`/download?token=${token || ''}&error=${encodeURIComponent('Password diperlukan')}`);
@@ -490,22 +522,23 @@ function startDownloadServer() {
       const tokenData = await verifyToken(token, pass);
       
       if (!tokenData) {
-        console.log('POST /download - Invalid token or password');
+        logger.warn('POST /download - Invalid token or password');
         return res.redirect(`/download?token=${token}&error=${encodeURIComponent('Password salah atau token tidak valid')}`);
       }
       
-      console.log('POST /download - Token valid, router:', tokenData.routerName);
+      logger.info(`POST /download - Token valid, router: ${tokenData.routerName}`);
       
       // Get all backup files for this router
       const files = await getBackupFilesByRouter(tokenData.routerName, 100);
-      console.log('POST /download - Found files:', files.length);
+      logger.info(`POST /download - Found files: ${files.length}`);
       
       const html = renderFileListPage(token, pass, tokenData, files);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(html);
       
     } catch (err) {
-      console.error('Error in POST /download:', err);
+      logger.error('Error in POST /download', err);
+      const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
       res.status(500).setHeader('Content-Type', 'text/html; charset=utf-8').send(`
         <!DOCTYPE html>
         <html>
@@ -520,7 +553,7 @@ function startDownloadServer() {
         <body>
           <h1 class="error">❌ Error</h1>
           <p>Terjadi kesalahan saat memproses permintaan.</p>
-          <p style="font-size: 12px; color: #999;">${err.message || 'Unknown error'}</p>
+          <p style="font-size: 12px; color: #999;">${escapeHtml(sanitizedMsg)}</p>
         </body>
         </html>
       `);
@@ -625,9 +658,46 @@ function startDownloadServer() {
       res.setHeader('Content-Type', 'application/octet-stream');
       
       const fileStream = fs.createReadStream(filePath);
+      
+      // Handle stream errors and cleanup
+      fileStream.on('error', (streamErr) => {
+        logger.error('File stream error', streamErr);
+        if (!res.headersSent) {
+          const sanitizedMsg = sanitizeError(streamErr.message || 'Tidak diketahui');
+          res.status(500).send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Download Error</title>
+              <meta charset="utf-8">
+              <style>
+                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+                .error { color: #d32f2f; }
+              </style>
+            </head>
+            <body>
+              <h1 class="error">❌ Error</h1>
+              <p>Terjadi kesalahan saat mengunduh file.</p>
+              <p style="font-size: 12px; color: #999;">${escapeHtml(sanitizedMsg)}</p>
+            </body>
+            </html>
+          `);
+        }
+        fileStream.destroy();
+      });
+      
+      // Cleanup stream when response ends
+      res.on('close', () => {
+        if (!fileStream.destroyed) {
+          fileStream.destroy();
+        }
+      });
+      
       fileStream.pipe(res);
       
     } catch (err) {
+      logger.error('Error in GET /download/file', err);
+      const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
       res.status(500).send(`
         <!DOCTYPE html>
         <html>
@@ -642,6 +712,7 @@ function startDownloadServer() {
         <body>
           <h1 class="error">❌ Error</h1>
           <p>Terjadi kesalahan saat mengunduh file.</p>
+          <p style="font-size: 12px; color: #999;">${escapeHtml(sanitizedMsg)}</p>
         </body>
         </html>
       `);
@@ -677,7 +748,8 @@ function startDownloadServer() {
   
   // Global error handler
   app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
+    logger.error('Unhandled error', err);
+    const sanitizedMsg = sanitizeError(err.message || 'Tidak diketahui');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(500).send(`
       <!DOCTYPE html>
@@ -693,7 +765,7 @@ function startDownloadServer() {
       <body>
         <h1 class="error">❌ Server Error</h1>
         <p>Terjadi kesalahan pada server.</p>
-        <p style="font-size: 12px; color: #999;">${err.message || 'Unknown error'}</p>
+        <p style="font-size: 12px; color: #999;">${escapeHtml(sanitizedMsg)}</p>
       </body>
       </html>
     `);

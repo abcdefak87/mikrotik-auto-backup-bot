@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs-extra');
+const config = require('../config');
 
 const tokensDir = path.join(__dirname, '..', '..', 'data', 'downloadTokens');
 const tokensFile = path.join(tokensDir, 'tokens.json');
@@ -73,8 +74,8 @@ async function createRouterToken(routerName, password) {
   for (const [token, data] of Object.entries(tokens)) {
     if (data.routerName === routerName && !data.expiresAt) {
       existingToken = token;
-      // Update password if provided, or use default if not provided
-      const newPassword = password || 'mikrotikunnet';
+      // Update password if provided, or use default from config
+      const newPassword = password || config.downloadServer.defaultPassword;
       if (tokens[token].password !== newPassword) {
         tokens[token].password = newPassword;
         await saveTokens(tokens);
@@ -85,7 +86,7 @@ async function createRouterToken(routerName, password) {
   
   // Create new token if doesn't exist
   const token = generateToken();
-  const tokenPassword = password || 'mikrotikunnet';
+  const tokenPassword = password || config.downloadServer.defaultPassword;
   
   tokens[token] = {
     routerName,
@@ -155,7 +156,7 @@ async function verifyTokenOnly(token) {
 async function updateAllTokensToDefaultPassword() {
   const tokens = await getTokens();
   let updated = false;
-  const defaultPassword = 'mikrotikunnet';
+  const defaultPassword = config.downloadServer.defaultPassword;
   
   for (const [token, data] of Object.entries(tokens)) {
     if (data.password !== defaultPassword && !data.expiresAt) {
