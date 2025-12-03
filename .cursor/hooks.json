@@ -19,6 +19,10 @@
       {
         "command": "node .cursor/validate.js \"${file}\" 2>&1 || true",
         "description": "Validasi code standards sebelum AI memproses"
+      },
+      {
+        "command": "node .cursor/debug.js \"${file}\" 2>&1 || true",
+        "description": "Debug check - deteksi common bugs dan potential issues"
       }
     ],
     "afterSave": [
